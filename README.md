@@ -48,7 +48,7 @@ node --test background.test.js content.test.js
 
 ## Phát hành
 
-Khi đẩy một tag `v*` lên GitHub, workflow chạy test rồi tạo GitHub Release. Trong Release, tải **Source code (zip)** do GitHub cung cấp, giải nén và dùng **Load unpacked** với thư mục vừa giải nén. Có thể chạy workflow thủ công với `release_tag` là một tag đã tồn tại.
+Trước khi tạo tag, cập nhật phiên bản trong `manifest.json` và thêm mục `## [phiên bản]` vào [CHANGELOG.md](CHANGELOG.md). Khi đẩy tag tương ứng (ví dụ `v1.3.0`), workflow chạy test và dùng đúng mục changelog đó làm ghi chú GitHub Release. Trong Release, tải **Source code (zip)** do GitHub cung cấp, giải nén và dùng **Load unpacked** với thư mục vừa giải nén. Có thể chạy workflow thủ công với `release_tag` là một tag đã tồn tại.
 
 ## Lưu ý
 

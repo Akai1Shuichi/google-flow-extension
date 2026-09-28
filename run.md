@@ -1,31 +1,18 @@
-# Push Tag Để Build & Release
+# Phát hành Google Flow AI Auto-Generator
 
-Workflow GitHub Actions tại `.github/workflows/build.yml` sẽ build **Editor Video App** trên Windows, macOS và Linux khi nhận tag có dạng `v*`.
+Workflow tại `.github/workflows/build.yml` chạy test và tạo GitHub Release khi đẩy tag dạng `v*`. GitHub tự cung cấp **Source code (zip)** trong Release; extension không cần build riêng cho từng hệ điều hành.
+
+Trước khi tạo tag, cập nhật phiên bản trong `manifest.json` và thêm mục `## [phiên bản]` tương ứng vào `CHANGELOG.md`. Ví dụ tag `v1.3.0` sẽ dùng ghi chú dưới mục `## [1.3.0]`.
 
 ```bash
-git add .
-git commit -m "Mô tả thay đổi"
+git add manifest.json CHANGELOG.md .github/workflows/build.yml README.md run.md
+git commit -m "Prepare v1.3.0 release"
 git push origin master
 
-# Tạo tag phát hành (ví dụ v1.1)
-git tag -a v1.0 -m "Google Flow AI v1.0"
-
-# Push tag để kích hoạt build và tạo GitHub Release
-git push origin v1.0
+git tag -a v1.3.0 -m "Google Flow AI v1.3.0"
+git push origin v1.3.0
 ```
 
-Sau khi workflow hoàn tất, các gói ZIP cho ba hệ điều hành sẽ có trong GitHub Release của tag đó.
+Sau khi workflow hoàn tất, mở GitHub Release của tag để xem ghi chú và tải **Source code (zip)**. Giải nén ZIP rồi dùng **Load unpacked** trong Chrome với thư mục chứa `manifest.json`.
 
-## Push Lại Tag
-
-Khi cần build lại cùng một phiên bản (ví dụ `v1.0`) sau khi đã sửa code, xoá tag cũ ở cả máy local và GitHub, rồi tạo lại tag. Thay `v1.0` bằng đúng phiên bản cần phát hành:
-
-```bash
-# Xoá tag cũ ở local và remote
-git tag -d v1.0
-git push origin --delete v1.0
-
-# Tạo lại tag tại commit hiện tại và push để kích hoạt workflow lần nữa
-git tag -a v1.0 -m "Google Flow AI v1.0"
-git push origin v1.0
-```
+Nếu cần chạy lại workflow cho cùng tag, dùng **Run workflow** trên GitHub Actions và nhập tag đã tồn tại vào `release_tag`. Workflow sẽ cập nhật ghi chú của Release hiện có theo changelog trong tag đó.
