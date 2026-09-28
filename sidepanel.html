@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <title>Google Flow AI Generator</title>
+  <link rel="stylesheet" href="sidepanel.css">
+</head>
+<body>
+  <div class="header">
+    <div class="logo-title">
+      <span class="badge-icon">🎨</span>
+      <div>
+        <h1>Flow AI Generator</h1>
+        <p class="subtitle">Bảng điều khiển Sidebar tự động hoá</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="container">
+
+
+    <div class="form-group">
+      <div class="label-row">
+        <label for="scenesJson">Dữ liệu Scenes (JSON)</label>
+        <div class="btn-links">
+          <button type="button" id="downloadSampleBtn" class="upload-btn" title="Tải file JSON mẫu">📥 Tải mẫu JSON</button>
+          <label for="fileInput" class="upload-btn" title="Chọn file JSON từ máy">📁 Tải file .json</label>
+        </div>
+        <input type="file" id="fileInput" accept=".json" style="display: none;">
+      </div>
+      <textarea id="scenesJson" rows="10" placeholder='[&#10;  {&#10;    "id": "SC01",&#10;    "character": "Người que",&#10;    "prompt": "..."&#10;  }&#10;]'></textarea>
+      <div id="jsonError" class="error-msg"></div>
+    </div>
+
+    <!-- Status & Progress -->
+    <div id="progressSection" class="progress-section" style="display: none;">
+      <div class="progress-bar-bg">
+        <div id="progressBar" class="progress-bar-fill" style="width: 0%;"></div>
+      </div>
+      <div id="statusText" class="status-text">Đang chuẩn bị...</div>
+    </div>
+
+    <!-- Actions -->
+    <div class="button-group">
+      <button id="startBtn" class="btn btn-primary">🚀 Tạo ảnh</button>
+      <button id="renameBtn" class="btn btn-secondary" title="Tìm kiếm theo prompt và đổi tên card thành SC01, SC02...">🏷️ Đổi tên Cards</button>
+      <button id="stopBtn" class="btn btn-danger" style="display: none;">⏹ Dừng lại</button>
+    </div>
+  </div>
+
+  <div class="footer">
+    <span>💡 Sidebar luôn mở song song bên cạnh Google Flow, không bị đóng khi click chuột ra ngoài.</span>
+  </div>
+
+  <script src="sidepanel.js"></script>
+</body>
+</html>

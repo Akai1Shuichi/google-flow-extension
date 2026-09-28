@@ -1,0 +1,22 @@
+# Dependencies and test output
+node_modules/
+coverage/
+.nyc_output/
+
+# Generated extension packages and build output
+dist/
+build/
+*.crx
+*.pem
+
+# Local configuration
+.env
+.env.*
+!.env.example
+
+# Editor and OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.log
