@@ -1,16 +1,28 @@
 [
   {
     "id": "SC01",
-    "character": "Người que",
-    "character_info": "Nhân vật người que, đầu tròn, tay chân nét đơn theo ảnh tham chiếu.",
-    "prompt": "Dùng ảnh đính kèm làm tham chiếu nhân vật, giữ nguyên thiết kế, đầu tròn và tay chân nét đơn. Nhân vật cúi bên đống than trong hang đá, vẻ tập trung, nhìn xuống than. Trung cảnh nhìn nghiêng, vách đá nâu phía sau, vài đốm than đỏ yếu dưới lớp tro xám; ánh sáng xanh nhạt từ cửa hang bên phải. Minh họa 2D viền đen, màu phẳng, tỷ lệ 16:9. Một nhân vật, một thời điểm chính. Không chữ, phụ đề, logo hoặc watermark.",
-    "subtitle_ids": [1, 2]
+    "character": "Người tiền sử chính",
+    "character_info": "Nam người tiền sử phong cách doodle, đầu tròn lớn, tóc nâu đen ngắn hơi rối, mắt chấm đen, tay chân nét mực đơn giản, mặc da thú nâu lệch một vai, chân trần.",
+    "prompt": "Khung hình 16:9, hoạt hình 2D hand-drawn doodle kiểu explainer, nền giấy trắng kem, nét mực đen dày hơi không đều, màu đất muted, bố cục tối giản. Một người tiền sử đứng bên bờ suối, nhìn hai bàn tay dính bùn của mình với vẻ tò mò như đang tự hỏi tại sao con người lại muốn sạch sẽ. Biểu cảm rõ, một khoảnh khắc duy nhất, không chữ, không phụ đề, không logo, không watermark.",
+    "subtitle_ids": [1],
+    "start_at": "00:00:00,000",
+    "end_at": "00:00:02,742",
+    "motion": {
+      "type": "zoom_in",
+      "strength": "subtle"
+    }
   },
   {
     "id": "SC02",
     "character": "",
     "character_info": "",
-    "prompt": "Cận cảnh đống than trong hang đá, vài đốm đỏ yếu dưới lớp tro xám và một làn khói mỏng, không có ngọn lửa. Vách đá nâu phía sau, ánh sáng xanh nhạt từ bên phải. Minh họa 2D viền đen, màu phẳng, tỷ lệ 16:9. Không đưa nhân vật trong ảnh tham chiếu vào cảnh này, kể cả khi ảnh đó được đính kèm. Không chữ, phụ đề, logo hoặc watermark.",
-    "subtitle_ids": [3]
+    "prompt": "Khung hình 16:9, hoạt hình 2D hand-drawn doodle kiểu explainer, nền giấy trắng kem, nét mực đen, màu muted. Một phòng tắm hiện đại tối giản với vòi sen, bánh xà phòng và khăn sạch, thể hiện trực quan việc vệ sinh như một thói quen hiện đại. Không nhân vật chính, không chữ, không phụ đề, không logo, không watermark.",
+    "subtitle_ids": [2],
+    "start_at": "00:00:02,742",
+    "end_at": "00:00:06,100",
+    "motion": {
+      "type": "zoom_out",
+      "strength": "subtle"
+    }
   }
 ]
