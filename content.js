@@ -169,6 +169,10 @@
   async function selectCharacter(editor, charName) {
     if (!charName) return;
     console.log(`[Flow AI Auto] Bắt đầu tìm và chọn nhân vật "${charName}"...`);
+    const ingredientCount = () => document.querySelectorAll(
+      'flow-prompt-box .chip-container[aria-label="Ingredient"], flow-base-prompt-box .chip-container[aria-label="Ingredient"]'
+    ).length;
+    const beforeCount = ingredientCount();
 
     // Cách 1: Thử tìm trong flow-add-menu-side-nav
     let sideNav = document.querySelector("flow-add-menu-side-nav");
@@ -226,11 +230,11 @@
       // 2. Tìm phần tử chứa .asset-title có tên trùng khớp với charName
       let matchedAsset = null;
       // Quét trong sideNav trước, sau đó quét toàn document
-      const assetTitles = sideNav.querySelectorAll(".asset-title, [class*='asset-title'], flow-asset-item, .character-name");
+      const assetTitles = sideNav.querySelectorAll(".asset-title, [class*='asset-title'], .character-name");
 
       for (const at of assetTitles) {
         const titleText = (at.innerText || "").trim();
-        if (titleText.toLowerCase() === charName.toLowerCase() || titleText.toLowerCase().includes(charName.toLowerCase())) {
+        if (titleText.toLowerCase() === charName.toLowerCase()) {
           matchedAsset = at;
           break;
         }
@@ -241,7 +245,7 @@
         const globalTitles = document.querySelectorAll(".asset-title, [class*='asset-title']");
         for (const at of globalTitles) {
           const titleText = (at.innerText || "").trim();
-          if (titleText.toLowerCase() === charName.toLowerCase() || titleText.toLowerCase().includes(charName.toLowerCase())) {
+          if (titleText.toLowerCase() === charName.toLowerCase()) {
             matchedAsset = at;
             break;
           }
@@ -251,13 +255,23 @@
       if (matchedAsset) {
         console.log(`[Flow AI Auto] Tìm thấy asset-title "${matchedAsset.innerText.trim()}", đang click chọn...`);
         // Click vào asset hoặc phần tử cha clickable của nó
-        const clickTarget = matchedAsset.closest("button, mat-card, flow-asset-item, .asset-card, .mat-mdc-card") || matchedAsset;
+        const clickTarget = matchedAsset.closest("flow-add-menu-asset-item, button, mat-card, flow-asset-item, .asset-card, .mat-mdc-card") || matchedAsset;
         clickTarget.click();
         await sleep(600);
+        if (ingredientCount() === beforeCount) {
+          const addButton = document.querySelector('button.detail-add-to-prompt-btn, button.add-to-prompt-button, button[aria-label="Add to prompt"], flow-add-menu-asset-preview button');
+          if (addButton && isVisible(addButton)) {
+            addButton.click();
+            await sleep(600);
+          }
+        }
+        if (ingredientCount() <= beforeCount) {
+          throw new Error(`Không gắn được tham chiếu nhân vật "${charName}" vào prompt.`);
+        }
         console.log(`[Flow AI Auto] Đã chọn thành công nhân vật "${charName}" qua side-nav!`);
         return true;
       } else {
-        console.log(`[Flow AI Auto] Chưa thấy asset-title nào khớp "${charName}" trong side-nav, chuyển sang fallback @tag.`);
+        throw new Error(`Không tìm thấy nhân vật "${charName}" trong assets của project.`);
       }
     }
 
@@ -302,10 +316,10 @@
   async function processScene(editor, scene, index, total) {
     const sceneId = scene.id || `SC${index + 1}`;
     const prompt = (scene.prompt || "").trim();
-    const characterName = (scene.character || "").trim();
+    const characterNames = String(scene.character || "").split(";").map(name => name.trim()).filter(Boolean);
 
     updateProgress(index + 1, total, `Đang xử lý ${sceneId} (${index + 1}/${total})...`);
-    console.log(`[Flow AI Auto] Bắt đầu Scene ${sceneId}: character="${characterName}", prompt=${prompt.substring(0, 60)}...`);
+    console.log(`[Flow AI Auto] Bắt đầu Scene ${sceneId}: character="${characterNames.join('; ')}", prompt=${prompt.substring(0, 60)}...`);
 
     // Flow mới giữ ingredient ngoài editor; Clear prompt xóa cả chữ và chip.
     const clearPrompt = document.querySelector('flow-prompt-box button[aria-label="Clear prompt"], flow-base-prompt-box button[aria-label="Clear prompt"]');
@@ -335,9 +349,13 @@
     } catch (e) {}
 
     // Chọn nhân vật qua side-nav / tag nếu scene có trường character
-    if (characterName) {
-      console.log(`[Flow AI Auto] Scene ${sceneId} có nhân vật "${characterName}", đang gắn thẻ...`);
-      await selectCharacter(editor, characterName);
+    if (characterNames.length) {
+      for (const characterName of characterNames) {
+        if (shouldStop) return;
+        console.log(`[Flow AI Auto] Scene ${sceneId} có nhân vật "${characterName}", đang gắn thẻ...`);
+        editor = document.querySelector('.ProseMirror[contenteditable="true"]') || editor;
+        await selectCharacter(editor, characterName);
+      }
     } else {
       console.log(`[Flow AI Auto] Scene ${sceneId} không có nhân vật (character="").`);
     }
@@ -345,7 +363,7 @@
     // Chèn nội dung prompt (nếu có tag nhân vật thì thêm 1 khoảng trắng phía trước)
     editor = document.querySelector('.ProseMirror[contenteditable="true"]') || editor;
     editor.focus();
-    const textToInsert = characterName ? (" " + prompt) : prompt;
+    const textToInsert = characterNames.length ? (" " + prompt) : prompt;
     document.execCommand("insertText", false, textToInsert);
     await sleep(600);
 

@@ -13,7 +13,7 @@ Không cần cài dependency hoặc chạy bước build.
 ## Sử dụng
 
 1. Dán danh sách scene vào ô **Dữ liệu Scenes (JSON)**, hoặc chọn **Tải file .json**. Có thể bấm **Tải mẫu JSON** hoặc xem [sample_scenes.json](sample_scenes.json).
-2. Bấm **Tạo ảnh**. Extension chọn chế độ Image và lần lượt gửi prompt của từng scene tới Google Flow. Nếu scene có `character`, extension sẽ tìm nhân vật cùng tên trong assets của dự án để gắn vào prompt.
+2. Bấm **Tạo ảnh**. Extension chọn chế độ Image và lần lượt gửi prompt của từng scene tới Google Flow. Nếu scene có `character`, extension sẽ tìm từng nhân vật trong assets của dự án để gắn vào prompt.
 3. Theo dõi tiến độ trong Side Panel; bấm **Dừng lại** để ngừng xử lý các scene tiếp theo.
 4. Sau khi tạo ảnh, có thể bấm **Đổi tên Cards** để tìm card theo prompt và đổi tên thành `id` của scene (`SC01`, `SC02`, ...). Nếu một prompt có nhiều card, các card tiếp theo nhận hậu tố `_1`, `_2`, ...
 
@@ -23,7 +23,7 @@ Dữ liệu có thể là một mảng hoặc một object chứa mảng `scenes
 [
   {
     "id": "SC01",
-    "character": "Tên nhân vật trong assets",
+    "character": "Người chồng; Người vợ",
     "prompt": "Mô tả ảnh cần tạo"
   },
   {
@@ -34,7 +34,7 @@ Dữ liệu có thể là một mảng hoặc một object chứa mảng `scenes
 ]
 ```
 
-`prompt` là nội dung dùng để tạo ảnh và tìm card khi đổi tên. `id` là tên card mong muốn; nếu bỏ trống, extension tự dùng `SC1`, `SC2`, ... `character` có thể để trống. Các trường bổ sung trong file mẫu như `character_info` và `subtitle_ids` được giữ trong JSON nhưng không tham gia thao tác tạo ảnh hoặc đổi tên.
+`prompt` là nội dung dùng để tạo ảnh và tìm card khi đổi tên. `id` là tên card mong muốn; nếu bỏ trống, extension tự dùng `SC1`, `SC2`, ... `character` có thể để trống, chứa một tên, hoặc chứa nhiều tên ngăn cách bằng dấu chấm phẩy (`;`). Extension bỏ khoảng trắng thừa quanh mỗi tên và gắn từng asset trùng tên trước khi gửi prompt. Các trường bổ sung trong file mẫu như `character_info` và `subtitle_ids` được giữ trong JSON nhưng không tham gia thao tác tạo ảnh hoặc đổi tên.
 
 Nội dung JSON đang nhập được lưu cục bộ qua `chrome.storage.local` để có thể mở lại Side Panel mà không phải nhập lại.
 

@@ -6,7 +6,7 @@ const path = require('node:path');
 
 const source = fs.readFileSync(path.join(__dirname, 'content.js'), 'utf8');
 
-async function runGeneration({ menu = true, submit = true, imageLabel = 'Image', basePrompt = false, modelAriaLabel = 'Nano Banana Pro', liveRadio = null, existingIngredient = false, fixedPrompt = false, editorReplacedAfterCharacter = false, submitDelayChecks = 0 } = {}) {
+async function runGeneration({ menu = true, submit = true, imageLabel = 'Image', basePrompt = false, modelAriaLabel = 'Nano Banana Pro', liveRadio = null, existingIngredient = false, fixedPrompt = false, editorReplacedAfterCharacter = false, submitDelayChecks = 0, character, assetMenu = false } = {}) {
   const actions = [];
   const updates = [];
   let listener;
@@ -36,6 +36,14 @@ async function runGeneration({ menu = true, submit = true, imageLabel = 'Image',
     Object.defineProperty(generate, 'disabled', { get() { return ++checks <= submitDelayChecks; } });
   }
   const clearPrompt = element('clear-prompt', 'Clear prompt');
+  let ingredientCount = 0;
+  const assetTitles = ['Người chồng', 'Người vợ'].map(name => ({
+    innerText: name,
+    closest() { return { click() { actions.push(`select-asset:${name}`); } }; }
+  }));
+  const addToPrompt = element('add-to-prompt');
+  addToPrompt.click = () => { actions.push('add-to-prompt'); ingredientCount++; };
+  const sideNav = { getClientRects() { return [{}]; }, querySelectorAll() { return []; } };
   const promptBox = {
     querySelectorAll(selector) {
       if (selector === 'button' || selector.includes('button')) return [trigger, generate];
@@ -60,6 +68,8 @@ async function runGeneration({ menu = true, submit = true, imageLabel = 'Image',
   const document = {
     body: { click() {} },
     querySelector(selector) {
+      if (assetMenu && selector === 'flow-add-menu-side-nav') return sideNav;
+      if (assetMenu && selector.includes('detail-add-to-prompt-btn')) return addToPrompt;
       if (selector.includes('button[aria-label="Clear prompt"]')) return existingIngredient ? clearPrompt : null;
       if (selector.includes('flow-toggles[aria-label="Mode"]')) return menuOpen && liveRadio !== null ? modeGroup : null;
       if (selector === 'flow-prompt-box-settings, .settings-content-overlay') return menuOpen && liveRadio !== null ? { offsetParent: fixedPrompt ? null : {}, getClientRects() { return [{}]; } } : null;
@@ -68,6 +78,8 @@ async function runGeneration({ menu = true, submit = true, imageLabel = 'Image',
       return null;
     },
     querySelectorAll(selector) {
+      if (assetMenu && selector.includes('.chip-container[aria-label="Ingredient"]')) return Array(ingredientCount).fill({});
+      if (assetMenu && selector.includes('.asset-title')) return assetTitles;
       if (selector.includes('mat-list-item')) return [];
       if (selector.includes('role="menuitem"') || selector.includes('role="option"') || selector.includes('cdk-overlay-pane')) return menu ? [image] : [];
       if (selector.includes('flow-generate-icon-button')) return [];
@@ -99,7 +111,7 @@ async function runGeneration({ menu = true, submit = true, imageLabel = 'Image',
   } };
   vm.runInNewContext(source, { document, chrome, console: { log() {}, error() {} },
     setTimeout: callback => setImmediate(callback), KeyboardEvent: class {} });
-  listener({ action: 'START_GENERATION', data: { scenes: [{ id: 'SC01', prompt: 'A red kite', character: editorReplacedAfterCharacter ? 'X' : '' }] } }, {}, () => {});
+  listener({ action: 'START_GENERATION', data: { scenes: [{ id: 'SC01', prompt: 'A red kite', character: character ?? (editorReplacedAfterCharacter ? 'X' : '') }] } }, {}, () => {});
   await done;
   return { actions, updates };
 }
@@ -178,6 +190,24 @@ test('uses the replacement editor after Flow adds an ingredient', async () => {
   assert.ok(actions.includes('focus-new-editor'), actions.join(', '));
   assert.ok(actions.includes('insert: A red kite'), actions.join(', '));
   assert.equal(actions.includes('insert-stale: A red kite'), false);
+  assert.equal(updates.at(-1).status, 'COMPLETED');
+});
+
+test('attaches each semicolon-separated character before inserting the prompt', async () => {
+  const { actions, updates } = await runGeneration({ character: 'Người chồng; Người vợ' });
+  assert.ok(actions.includes('insert:@Người chồng'), actions.join(', '));
+  assert.ok(actions.includes('insert:@Người vợ'), actions.join(', '));
+  assert.ok(actions.indexOf('insert:@Người chồng') < actions.indexOf('insert:@Người vợ'), actions.join(', '));
+  assert.ok(actions.indexOf('insert:@Người vợ') < actions.indexOf('insert: A red kite'), actions.join(', '));
+  assert.equal(updates.at(-1).status, 'COMPLETED');
+});
+
+test('adds both Flow character assets through the preview button', async () => {
+  const { actions, updates } = await runGeneration({ character: 'Người chồng; Người vợ', assetMenu: true });
+  assert.deepEqual(actions.filter(action => action.startsWith('select-asset:')), [
+    'select-asset:Người chồng', 'select-asset:Người vợ'
+  ]);
+  assert.equal(actions.filter(action => action === 'add-to-prompt').length, 2);
   assert.equal(updates.at(-1).status, 'COMPLETED');
 });
 
