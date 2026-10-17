@@ -1,0 +1,28 @@
+[
+  {
+    "id": "SC01",
+    "character": "Người tóc rối mặc da thú",
+    "character_info": "Nhân vật hoạt hình đầu tròn lớn màu trắng, tóc nâu ngắn rối nhọn, mắt và miệng bằng nét đen đơn giản. Thân nhỏ, tay chân mảnh, mặc da thú nâu có mép tua xù.",
+    "prompt": "Tranh minh họa tình huống giả định, hoạt hình 2D vẽ tay nét mực đen hơi không đều, khung ngang 16:9. Dùng ảnh tham chiếu đính kèm cho Người tóc rối mặc da thú, ảnh 1 là căn cứ thiết kế, ảnh 2 bổ sung biểu cảm; giữ mặt tròn trắng không mũi, tóc nâu rối nhọn, đầu lớn, tay chân que mảnh, áo da thú nâu chéo vai mép tua với nét lông ngắn, không thêm đốm lớn; không lấy súng hay chiến trường từ ảnh tham chiếu. Nhân vật đứng bên trái, cầm một con cá đưa về phía người thợ giày bên phải, vẻ mặt ngơ ngác. Người thợ phụ có đầu hói và áo vải be, xua tay với cá và hướng tay que về giỏ ngũ cốc đặt cạnh mình. Quầy gỗ có đôi giày da thô, mái che bằng vải và hàng rào đất phía sau; bố cục trung cảnh rõ hành động. Màu nâu đất, be, xanh xám, ánh sáng ban ngày dịu. Không có chữ, logo, watermark.",
+    "subtitle_ids": [1],
+    "start_at": "00:00:00,000",
+    "end_at": "00:00:03,153",
+    "motion": {
+      "type": "zoom_in",
+      "strength": "subtle"
+    }
+  },
+  {
+    "id": "SC02",
+    "character": "Người tóc rối mặc da thú",
+    "character_info": "Nhân vật hoạt hình đầu tròn lớn màu trắng, tóc nâu ngắn rối nhọn, mắt và miệng bằng nét đen đơn giản. Thân nhỏ, tay chân mảnh, mặc da thú nâu có mép tua xù.",
+    "prompt": "Tranh minh họa hài hước cho tình huống tưởng tượng, hoạt hình 2D nét mực đen vẽ tay hơi không đều, tỷ lệ 16:9. Dùng ảnh tham chiếu cho Người tóc rối mặc da thú, ảnh 1 làm căn cứ thiết kế và ảnh 2 bổ sung; giữ mặt trắng tròn không mũi, tóc nâu rối nhọn, đầu lớn, tay chân que mảnh, da thú nâu chéo vai tua xù có nét lông ngắn, không đốm lớn, không mang súng. Nhân vật ở một phần ba trái, ôm con cá với vài nét cong tượng trưng mùi và một con ruồi, nhíu mày lo lắng, nhìn sang phải về người phụ đang đứng cạnh bao ngũ cốc ở xa. Phía sau bên trái vẫn thấy quầy giày gỗ, đôi giày da thô và mái che vải của khu chợ minh họa. Đường đất dẫn ánh nhìn sang phải, không mô tả nhiều thời điểm trong ảnh. Màu đất trầm, xanh lá nhạt, ánh sáng ban ngày mềm. Không chữ, logo, watermark.",
+    "subtitle_ids": [2],
+    "start_at": "00:00:03,153",
+    "end_at": "00:00:06,490",
+    "motion": {
+      "type": "pan_right",
+      "strength": "subtle"
+    }
+  }
+]
