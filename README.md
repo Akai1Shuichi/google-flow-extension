@@ -19,7 +19,7 @@ Nếu đã cài bản cũ, bấm **Reload** extension trong `chrome://extensions
 3. Theo dõi tiến độ trong Side Panel; bấm **Dừng lại** để ngừng xử lý các scene tiếp theo.
 4. Sau khi gửi xong prompt, extension chờ response của từng request, lấy media ID rồi tự đổi tên đúng card. Một ảnh có tên `SC01`; nhiều ảnh có tên `SC01_1`, `SC01_2`, ... theo thứ tự trong response. Prompt trùng hoặc ảnh hoàn tất ngược thứ tự không làm đảo tên. Danh sách dài được cuộn để tìm đúng media ID.
 
-Dữ liệu có thể là một mảng hoặc một object chứa mảng `scenes`:
+Dữ liệu có thể là một mảng hoặc một object chứa mảng `scenes`. Chỉ cần các trường `id`, `character`, `prompt`; không bắt buộc `character_info`, `subtitle_ids` hay metadata khác. Ô nhập và tải file đều chấp nhận dấu phẩy thừa cuối object hoặc mảng (ví dụ sau `prompt`):
 
 ```json
 [

@@ -15,16 +15,12 @@ document.addEventListener("DOMContentLoaded", () => {
     {
       "id": "SC01",
       "character": "Người que",
-      "character_info": "Nhân vật người que, đầu tròn, tay chân nét đơn theo ảnh tham chiếu.",
-      "prompt": "Dùng ảnh đính kèm làm tham chiếu nhân vật, giữ nguyên thiết kế, đầu tròn và tay chân nét đơn. Nhân vật cúi bên đống than trong hang đá, vẻ tập trung, nhìn xuống than. Trung cảnh nhìn nghiêng, vách đá nâu phía sau, vài đốm than đỏ yếu dưới lớp tro xám; ánh sáng xanh nhạt từ cửa hang bên phải. Minh họa 2D viền đen, màu phẳng, tỷ lệ 16:9. Một nhân vật, một thời điểm chính. Không chữ, phụ đề, logo hoặc watermark.",
-      "subtitle_ids": [1, 2]
+      "prompt": "Dùng ảnh đính kèm làm tham chiếu nhân vật, giữ nguyên thiết kế, đầu tròn và tay chân nét đơn. Nhân vật cúi bên đống than trong hang đá, vẻ tập trung, nhìn xuống than. Trung cảnh nhìn nghiêng, vách đá nâu phía sau, vài đốm than đỏ yếu dưới lớp tro xám; ánh sáng xanh nhạt từ cửa hang bên phải. Minh họa 2D viền đen, màu phẳng, tỷ lệ 16:9. Một nhân vật, một thời điểm chính. Không chữ, phụ đề, logo hoặc watermark."
     },
     {
       "id": "SC02",
       "character": "",
-      "character_info": "",
-      "prompt": "Cận cảnh đống than trong hang đá, vài đốm đỏ yếu dưới lớp tro xám và một làn khói mỏng, không có ngọn lửa. Vách đá nâu phía sau, ánh sáng xanh nhạt từ bên phải. Minh họa 2D viền đen, màu phẳng, tỷ lệ 16:9. Không đưa nhân vật trong ảnh tham chiếu vào cảnh này, kể cả khi ảnh đó được đính kèm. Không chữ, phụ đề, logo hoặc watermark.",
-      "subtitle_ids": [3]
+      "prompt": "Cận cảnh đống than trong hang đá, vài đốm đỏ yếu dưới lớp tro xám và một làn khói mỏng, không có ngọn lửa. Vách đá nâu phía sau, ánh sáng xanh nhạt từ bên phải. Minh họa 2D viền đen, màu phẳng, tỷ lệ 16:9. Không đưa nhân vật trong ảnh tham chiếu vào cảnh này, kể cả khi ảnh đó được đính kèm. Không chữ, phụ đề, logo hoặc watermark."
     }
   ];
 
@@ -59,7 +55,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const reader = new FileReader();
     reader.onload = (event) => {
       try {
-        const parsed = JSON.parse(event.target.result);
+        const parsed = FlowScenesJson.parse(event.target.result);
         if (Array.isArray(parsed)) {
           scenesJsonArea.value = JSON.stringify(parsed, null, 2);
         } else if (parsed.scenes && Array.isArray(parsed.scenes)) {
@@ -92,7 +88,7 @@ document.addEventListener("DOMContentLoaded", () => {
       return null;
     }
     try {
-      const parsed = JSON.parse(raw);
+      const parsed = FlowScenesJson.parse(raw);
       let list = [];
       if (Array.isArray(parsed)) {
         list = parsed;
