@@ -42,6 +42,8 @@ Nội dung JSON đang nhập được lưu cục bộ qua `chrome.storage.local`
 
 Kết quả lượt chạy gần nhất được lưu trong `chrome.storage.local.flowLastBatch`: scene ID, media ID, tên và trạng thái. Không lưu request body, token, cookies hoặc URL ảnh có chữ ký. Nếu Flow đổi schema, thiếu ID hoặc trả lỗi, extension báo lỗi và giữ ánh xạ; không đoán theo thứ tự card. Chờ response tối đa 180 giây sau khi gửi xong. Dừng không hủy lượt tạo đã gửi trên máy chủ; các scene chưa xử lý hết không bị ghi là hoàn tất.
 
+Nếu kết nối request bị ngắt, extension kiểm tra response và dữ liệu đã nhận qua stream của chính request đó trước khi báo lỗi. Chỉ tiếp tục đổi tên khi HTTP 200 và đã nhận đủ media ID hợp lệ; không gửi lại lệnh tạo ảnh. Nếu thiếu kết quả, thông báo kèm mã lỗi mạng để chẩn đoán.
+
 ## Kiểm tra
 
 Cần Node.js có hỗ trợ `node:test`. Chạy từ thư mục dự án:

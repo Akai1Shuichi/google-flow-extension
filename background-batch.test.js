@@ -36,7 +36,7 @@ function harness() {
       download: async () => 1, search: async () => [{id: 1, state: 'complete', filename: 'Flow/run/SC01.jpg'}], cancel: async () => {} }
   };
   const context = vm.createContext({ chrome, console: {log(){},error(){}}, URL, URLSearchParams,
-    setTimeout, clearTimeout, crypto: webcrypto, atob: s => Buffer.from(s, 'base64').toString(),
+    setTimeout, clearTimeout, TextDecoder, Uint8Array, crypto: webcrypto, atob: s => Buffer.from(s, 'base64').toString('binary'),
     importScripts: (...names) => names.forEach(name => vm.runInContext(fs.readFileSync(path.join(__dirname, name), 'utf8'), context)) });
   vm.runInContext(fs.readFileSync(path.join(__dirname, 'background.js'), 'utf8'), context);
   async function send(message, from = sender) {
@@ -52,8 +52,94 @@ function harness() {
     onEvent.emit({tabId: 42}, 'Network.loadingFinished', { requestId: id });
     await new Promise(resolve => setImmediate(resolve));
   }
-  return { send, actions, saved, onEvent, onDetach, complete, onDeterminingFilename, chrome, sender };
+  return { send, actions, saved, bodies, onEvent, onDetach, complete, onDeterminingFilename, chrome, sender };
 }
+
+test('last scene recovers a valid response body when Flow cancels the transport', async () => {
+  const h = harness();
+  const start = await h.send({action:'FLOW_BATCH_START',scenes:[{id:'SC14',prompt:'same'}]});
+  await h.send({action:'TRUSTED_GENERATE_CLICK',runId:start.runId,sceneIndex:0});
+  h.bodies.set('r1', JSON.stringify([['wrb.fr','ogiZ0b',JSON.stringify([[[A]],[]])]]));
+  h.onEvent.emit({tabId:42}, 'Network.responseReceived', {requestId:'r1',response:{status:200}});
+  h.onEvent.emit({tabId:42}, 'Network.loadingFailed', {requestId:'r1',canceled:true,errorText:'net::ERR_ABORTED'});
+  await new Promise(resolve => setImmediate(resolve));
+  const scene = (await h.send({action:'FLOW_BATCH_STATUS',runId:start.runId})).batch.scenes[0];
+  assert.equal(scene.status, 'ready');
+  assert.equal(scene.outputs[0].mediaId, A);
+  assert.equal(scene.outputs[0].name, 'SC14');
+  assert.equal(h.actions.filter(action => action === 'Input.dispatchMouseEvent').length, 2);
+});
+
+test('streamed response survives cancellation when Chrome cannot return the response body', async () => {
+  const h = harness();
+  const start = await h.send({action:'FLOW_BATCH_START',scenes:[{id:'SC14',prompt:'same'}]});
+  await h.send({action:'TRUSTED_GENERATE_CLICK',runId:start.runId,sceneIndex:0});
+  const body = JSON.stringify([['wrb.fr','ogiZ0b',JSON.stringify([[[A]],[]])]]);
+  const original = h.chrome.debugger.sendCommand;
+  let resume;
+  h.chrome.debugger.sendCommand = async (...args) => {
+    if (args[1] === 'Network.getResponseBody') throw new Error('No resource with given identifier found');
+    if (args[1] === 'Network.streamResourceContent') return new Promise(resolve => { resume = resolve; });
+    return original(...args);
+  };
+  h.onEvent.emit({tabId:42}, 'Network.responseReceived', {requestId:'r1',response:{status:200}});
+  h.onEvent.emit({tabId:42}, 'Network.dataReceived', {requestId:'r1',data:Buffer.from(body.slice(25)).toString('base64')});
+  h.onEvent.emit({tabId:42}, 'Network.loadingFailed', {requestId:'r1',errorText:'net::ERR_ABORTED'});
+  if (resume) resume({bufferedData:Buffer.from(body.slice(0,25)).toString('base64')});
+  await new Promise(resolve => setImmediate(resolve));
+  const scene = (await h.send({action:'FLOW_BATCH_STATUS',runId:start.runId})).batch.scenes[0];
+  assert.equal(scene.status, 'ready');
+  assert.equal(scene.outputs[0].mediaId, A);
+});
+
+test('an interrupted request without complete media IDs reports the actual network error', async () => {
+  const h = harness();
+  const start = await h.send({action:'FLOW_BATCH_START',scenes:[{id:'SC14',prompt:'same'}]});
+  await h.send({action:'TRUSTED_GENERATE_CLICK',runId:start.runId,sceneIndex:0});
+  h.bodies.set('r1', '[incomplete');
+  h.onEvent.emit({tabId:42}, 'Network.responseReceived', {requestId:'r1',response:{status:200}});
+  h.onEvent.emit({tabId:42}, 'Network.loadingFailed', {requestId:'r1',errorText:'net::ERR_CONNECTION_RESET'});
+  await new Promise(resolve => setImmediate(resolve));
+  const scene = (await h.send({action:'FLOW_BATCH_STATUS',runId:start.runId})).batch.scenes[0];
+  assert.equal(scene.status, 'error');
+  assert.match(scene.error, /net::ERR_CONNECTION_RESET/);
+  assert.equal(scene.outputs.length, 0);
+});
+
+test('late loadingFailed cannot invalidate media IDs already received', async () => {
+  const h = harness();
+  const start = await h.send({action:'FLOW_BATCH_START',scenes:[{id:'SC14',prompt:'same'}]});
+  await h.send({action:'TRUSTED_GENERATE_CLICK',runId:start.runId,sceneIndex:0});
+  await h.complete('r1', A);
+  h.onEvent.emit({tabId:42}, 'Network.loadingFailed', {requestId:'r1',errorText:'net::ERR_ABORTED'});
+  await new Promise(resolve => setImmediate(resolve));
+  const scene = (await h.send({action:'FLOW_BATCH_STATUS',runId:start.runId})).batch.scenes[0];
+  assert.equal(scene.status, 'ready');
+  assert.equal(scene.outputs[0].mediaId, A);
+});
+
+test('partial streamed results and HTTP errors never become successful images', async () => {
+  for (const [status, body] of [
+    [200, JSON.stringify([['wrb.fr','ogiZ0b',JSON.stringify([[[A]],[]])]]).slice(0, -3)],
+    [503, JSON.stringify([['wrb.fr','ogiZ0b',JSON.stringify([[[A]],[]])]])]
+  ]) {
+    const h = harness();
+    const start = await h.send({action:'FLOW_BATCH_START',scenes:[{id:'SC14',prompt:'same'}]});
+    await h.send({action:'TRUSTED_GENERATE_CLICK',runId:start.runId,sceneIndex:0});
+    const original = h.chrome.debugger.sendCommand;
+    h.chrome.debugger.sendCommand = async (...args) => {
+      if (args[1] === 'Network.getResponseBody') throw new Error('No resource');
+      if (args[1] === 'Network.streamResourceContent') return {bufferedData:Buffer.from(body).toString('base64')};
+      return original(...args);
+    };
+    h.onEvent.emit({tabId:42}, 'Network.responseReceived', {requestId:'r1',response:{status}});
+    h.onEvent.emit({tabId:42}, 'Network.loadingFailed', {requestId:'r1',errorText:'net::ERR_ABORTED'});
+    await new Promise(resolve => setImmediate(resolve));
+    const scene = (await h.send({action:'FLOW_BATCH_STATUS',runId:start.runId})).batch.scenes[0];
+    assert.equal(scene.status, 'error');
+    assert.equal(scene.outputs.length, 0);
+  }
+});
 
 test('extension keeps one debugger session and maps out-of-order results to originating clicks', async () => {
   const h = harness();

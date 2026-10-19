@@ -33,7 +33,12 @@
     }
     return session;
   }
-  async function end(session, stopped = false) {
+  function end(session, stopped = false) {
+    if (session.ending) return session.ending;
+    session.ending = closeSession(session, stopped);
+    return session.ending;
+  }
+  async function closeSession(session, stopped) {
     if (stopped) session.core.stop();
     // Unfinished records remain distinguishable from completed records.
     for (const scene of session.core.scenes) if (!['completed', 'error', 'stopped'].includes(scene.status)) scene.status = stopped ? 'stopped' : 'interrupted';
@@ -42,8 +47,70 @@
       session.attached = false;
       await chrome.debugger.detach({ tabId: session.tabId }).catch(() => {});
     }
-    sessions.delete(session.tabId);
+    if (sessions.get(session.tabId) === session) sessions.delete(session.tabId);
     return session.core.snapshot();
+  }
+  const MAX_RESPONSE_BYTES = 10000000;
+  function appendChunk(stream, data) {
+    if (!data || stream.overflow) return;
+    const chunk = atob(data);
+    stream.size += chunk.length;
+    if (stream.size > MAX_RESPONSE_BYTES) {
+      stream.overflow = true;
+      stream.chunks = [];
+    } else stream.chunks.push(chunk);
+  }
+  function decodeBody(binary) {
+    return new TextDecoder().decode(Uint8Array.from(binary, char => char.charCodeAt(0)));
+  }
+  function streamResponse(session, source, requestId) {
+    const stream = { chunks: [], size: 0, overflow: false };
+    session.streams.set(requestId, stream);
+    // Chunk events can arrive before this command resolves. Prepend buffered bytes.
+    stream.ready = chrome.debugger.sendCommand(source, 'Network.streamResourceContent', { requestId })
+      .then(result => {
+        if (!result.bufferedData || stream.overflow) return;
+        const buffered = { chunks: [], size: stream.size, overflow: false };
+        appendChunk(buffered, result.bufferedData);
+        stream.size = buffered.size;
+        stream.overflow = buffered.overflow;
+        stream.chunks = buffered.overflow ? [] : [...buffered.chunks, ...stream.chunks];
+      }).catch(() => {}); // Older Chrome may not support streaming; use getResponseBody.
+  }
+  async function receiveResult(session, source, params, failed) {
+    const { core } = session;
+    const requestId = params.requestId;
+    const scene = core.scenes[core.requests.get(requestId)];
+    if (scene?.status !== 'submitted' || core.stopped) return;
+    const stream = session.streams.get(requestId);
+    try {
+      await stream?.ready;
+      let text;
+      try {
+        const body = await chrome.debugger.sendCommand(source, 'Network.getResponseBody', { requestId });
+        if (typeof body.body === 'string') text = body.base64Encoded ? decodeBody(atob(body.body)) : body.body;
+      } catch (_) { /* Canceled XHRs may no longer expose their body. */ }
+      const candidates = [text];
+      if (stream && !stream.overflow && stream.size) candidates.push(decodeBody(stream.chunks.join('')));
+      let responseText;
+      for (const candidate of candidates) {
+        if (typeof candidate !== 'string') continue;
+        try {
+          // Validate first: partial streamed JSON must not turn a pending scene into an error.
+          FlowBatchCore.parseImageResponse(candidate, scene.expected);
+          responseText = candidate;
+          break;
+        } catch (_) {}
+      }
+      if (responseText !== undefined) core.reply(requestId, session.statuses.get(requestId), responseText);
+      else if (failed) {
+        if (scene.status === 'submitted' && !core.stopped) core.fail(scene.sceneIndex,
+          `Request tạo ảnh bị ngắt (${params.errorText || 'không rõ nguyên nhân'}); chưa nhận đủ media ID.`);
+      } else core.reply(requestId, session.statuses.get(requestId), text || '');
+      await persist(session);
+    } finally {
+      session.streams.delete(requestId);
+    }
   }
   chrome.debugger.onEvent.addListener((source, method, params) => {
     const session = sessions.get(source.tabId);
@@ -62,15 +129,18 @@
         }
         if (core.observe(params.requestId, request)) await persist(session);
       } else if (core.requests.has(params.requestId)) {
-        if (method === 'Network.responseReceived') session.statuses.set(params.requestId, params.response.status);
-        if (method === 'Network.loadingFailed') {
-          core.fail(core.requests.get(params.requestId), 'Request tạo ảnh bị ngắt.');
-          await persist(session);
+        if (method === 'Network.responseReceived') {
+          session.statuses.set(params.requestId, params.response.status);
+          if (core.scenes[core.requests.get(params.requestId)]?.status === 'submitted') {
+            streamResponse(session, source, params.requestId);
+          }
         }
-        if (method === 'Network.loadingFinished') {
-          const body = await chrome.debugger.sendCommand(source, 'Network.getResponseBody', { requestId: params.requestId });
-          core.reply(params.requestId, session.statuses.get(params.requestId), body.base64Encoded ? atob(body.body) : body.body);
-          await persist(session);
+        if (method === 'Network.dataReceived') {
+          const stream = session.streams.get(params.requestId);
+          if (stream) appendChunk(stream, params.data);
+        }
+        if (method === 'Network.loadingFailed' || method === 'Network.loadingFinished') {
+          await receiveResult(session, source, params, method === 'Network.loadingFailed');
         }
       }
     })().catch(async error => {
@@ -95,12 +165,12 @@
       if (request.action === 'FLOW_BATCH_START') {
         if (sessions.has(tab.id)) {
           const previous = sessions.get(tab.id);
-          if (previous.attached && previous.core.projectId === project(tab.url)) throw new Error('Tab này đang có batch chạy.');
+          if (!previous.ending && previous.attached && previous.core.projectId === project(tab.url)) throw new Error('Tab này đang có batch chạy.');
           await end(previous);
         }
         const runId = new Date().toISOString().replace(/[:.]/g, '-') + '-' + crypto.randomUUID().slice(0, 8);
         const core = new FlowBatchCore.Batch(request.scenes, project(tab.url), runId);
-        const session = { core, tabId: tab.id, attached: false, statuses: new Map() };
+        const session = { core, tabId: tab.id, attached: false, statuses: new Map(), streams: new Map() };
         sessions.set(tab.id, session);
         try {
           await chrome.debugger.attach({tabId: tab.id}, '1.3');
