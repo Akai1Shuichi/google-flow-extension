@@ -7,8 +7,8 @@ document.addEventListener("DOMContentLoaded", () => {
   const progressBar = document.getElementById("progressBar");
   const statusText = document.getElementById("statusText");
   const startBtn = document.getElementById("startBtn");
-  const renameBtn = document.getElementById("renameBtn");
   const stopBtn = document.getElementById("stopBtn");
+  let runningTabId = null;
 
   // Sample data definition
   const SAMPLE_SCENES = [
@@ -78,9 +78,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Save settings on change
   function saveState() {
-    chrome.storage.local.set({
-      savedJson: scenesJsonArea.value
-    });
+    chrome.storage.local.set({ savedJson: scenesJsonArea.value });
   }
 
   scenesJsonArea.addEventListener("input", saveState);
@@ -151,7 +149,7 @@ document.addEventListener("DOMContentLoaded", () => {
         console.log("[SidePanel] Đang chèn content.js vào tab...");
         await chrome.scripting.executeScript({
           target: { tabId: tabId },
-          files: ["content.js"]
+          files: ["batch-content.js", "content.js"]
         });
         // Chờ 300ms sau khi inject
         await new Promise(r => setTimeout(r, 300));
@@ -167,6 +165,8 @@ document.addEventListener("DOMContentLoaded", () => {
   startBtn.addEventListener("click", async () => {
     const scenes = getScenesList();
     if (!scenes) return;
+    try { FlowBatchCore.sceneNames(scenes); }
+    catch (error) { jsonError.textContent = error.message; return; }
 
     jsonError.textContent = "";
     statusText.textContent = "Đang tìm tab Google Flow...";
@@ -192,7 +192,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     startBtn.style.display = "none";
-    if (renameBtn) renameBtn.style.display = "none";
+    runningTabId = tab.id;
     stopBtn.style.display = "block";
     statusText.textContent = "Đang khởi động tiến trình...";
 
@@ -205,70 +205,32 @@ document.addEventListener("DOMContentLoaded", () => {
       if (chrome.runtime.lastError) {
         jsonError.textContent = "Lỗi gửi lệnh: " + chrome.runtime.lastError.message;
         resetUI();
+      } else if (response?.status !== 'STARTED') {
+        statusText.textContent = 'Tab đang chạy một tiến trình khác. Chờ hoàn tất hoặc bấm Dừng lại.';
       }
     });
   });
-
-  // Rename cards manually
-  if (renameBtn) {
-    renameBtn.addEventListener("click", async () => {
-      const scenes = getScenesList();
-      if (!scenes) return;
-
-      jsonError.textContent = "";
-      statusText.textContent = "Đang tìm tab Google Flow...";
-      progressSection.style.display = "flex";
-      progressBar.style.width = "0%";
-
-      const tab = await findGoogleFlowTab();
-      if (!tab) {
-        jsonError.textContent = "Không tìm thấy tab Google Flow nào đang mở! Hãy mở tab https://flow.google.com/project/... rồi thử lại.";
-        progressSection.style.display = "none";
-        return;
-      }
-
-      await chrome.tabs.update(tab.id, { active: true });
-
-      statusText.textContent = "Đang kết nối tới trang Google Flow...";
-      const ready = await ensureContentScriptInjected(tab.id);
-      if (!ready) {
-        jsonError.textContent = "Không thể kết nối vào tab Google Flow. Vui lòng bấm F5 lại trang Google Flow rồi thử lại!";
-        progressSection.style.display = "none";
-        return;
-      }
-
-      startBtn.style.display = "none";
-      renameBtn.style.display = "none";
-      stopBtn.style.display = "block";
-      statusText.textContent = "Đang bắt đầu tìm kiếm và đổi tên card...";
-
-      chrome.tabs.sendMessage(tab.id, {
-        action: "START_RENAME",
-        data: {
-          scenes: scenes
-        }
-      }, (response) => {
-        if (chrome.runtime.lastError) {
-          jsonError.textContent = "Lỗi gửi lệnh: " + chrome.runtime.lastError.message;
-          resetUI();
-        }
-      });
-    });
-  }
 
   // Stop automation
   stopBtn.addEventListener("click", async () => {
-    const tab = await findGoogleFlowTab();
+    const tab = runningTabId ? {id: runningTabId} : await findGoogleFlowTab();
     if (tab && tab.id) {
-      chrome.tabs.sendMessage(tab.id, { action: "STOP_GENERATION" });
+      try {
+        const response = await chrome.tabs.sendMessage(tab.id, { action: "STOP_GENERATION" });
+        if (response?.status !== 'STOPPING') throw new Error('Không xác nhận được lệnh dừng.');
+      } catch (error) {
+        jsonError.textContent = error.message;
+        resetUI();
+        return;
+      }
     }
     statusText.textContent = "Đã gửi lệnh dừng...";
-    setTimeout(resetUI, 1200);
   });
 
   // Lắng nghe cập nhật tiến trình từ content.js
-  chrome.runtime.onMessage.addListener((message) => {
+  chrome.runtime.onMessage.addListener((message, sender) => {
     if (message.action === "PROGRESS_UPDATE") {
+      if (runningTabId !== null && sender.tab?.id !== runningTabId) return;
       const { current, total, text, status } = message.data;
       const pct = Math.round((current / total) * 100);
       progressBar.style.width = `${pct}%`;
@@ -289,8 +251,8 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   function resetUI() {
+    runningTabId = null;
     startBtn.style.display = "block";
-    if (renameBtn) renameBtn.style.display = "block";
     stopBtn.style.display = "none";
   }
 });

@@ -2,3 +2,5 @@
 __pycache__/
 chrome_data/
 chrome.log
+output/
+results/

@@ -1,13 +1,22 @@
 # Google Flow — Python runner đối chiếu extension
 
-Runner độc lập dùng **Python 3.10+ và Playwright Python**, không cần cài extension hay Node.js để chạy. Python quản lý JSON, tab, tiến độ, dừng và CDP; `workflow.js` là bản sao nguyên byte của `../content.js` tại commit `3521a0b1e6d36de8d3801bf6f7fef3bacaf0183e`. Logic DOM vẫn thực thi bằng JavaScript trong isolated world của tab. Đây là lựa chọn có chủ ý để giữ đúng `execCommand`, sự kiện tổng hợp, ép kiểu JavaScript, selector và thời gian chờ; **không phải bản viết lại toàn bộ thuật toán bằng cú pháp Python**. Có thể sao chép riêng thư mục này ra ngoài repo để chạy.
+Runner độc lập dùng **Python 3.10+ và Playwright Python**, không cần cài extension hay Node.js để chạy. Python quản lý JSON, tab, tiến độ, dừng, CDP và kết quả ảnh; `workflow.js` giữ nguyên bản sao của `../content.js`. Logic gửi prompt vẫn thực thi bằng JavaScript trong isolated world của tab. `flow_results.py` bổ sung ánh xạ từng request tạo ảnh sang scene, đổi tên card theo media ID và tải ảnh gốc. Có thể sao chép riêng thư mục này ra ngoài repo để chạy.
 
 ## Cài đặt
 
 ```bash
+Linux/macOS:
 cd python-runner
 python3 -m venv .venv
 source .venv/bin/activate
+python -m pip install -r requirements.txt
+```
+
+windows Cmd:
+```
+cd python-runner
+python -m venv .venv
+.venv\Scripts\activate
 python -m pip install -r requirements.txt
 ```
 
@@ -32,6 +41,21 @@ python automation generate
 # hoặc:
 python automation rename
 ```
+
+`generate` mặc định gửi các prompt lần lượt trong khi ảnh vẫn render song song, chờ kết quả rồi đổi tên card và tải ảnh gốc theo `id` trong JSON. Một ảnh có tên `SC01`; nhiều ảnh có tên `SC01_1`, `SC01_2`, ... theo thứ tự trong response của chính request đó. Đuôi file giữ đúng định dạng tải về (`.jpg`, `.png`, ...), không ép thành PNG.
+
+```powershell
+python automation generate --no-download              # Chỉ đổi tên card trên Flow
+python automation generate --output-dir D:\Images     # Chọn nơi lưu ảnh
+python automation generate --generation-timeout 300   # Chờ response tối đa 300 giây sau khi gửi xong
+python automation generate --submit-only              # Luồng cũ: chỉ gửi prompt
+```
+
+Mỗi lần chạy tạo một thư mục riêng trong `output/<run-id>/` và bảng ánh xạ `results/<run-id>.json`, tránh ghi đè ảnh của lần trước. Bảng ánh xạ chứa scene ID, media ID, tên, trạng thái và đường dẫn file; không lưu token, cookies hoặc URL ảnh có chữ ký. `--results-dir` thay nơi lưu bảng ánh xạ.
+
+Runner quan sát request `batchexecute` chứa RPC tạo ảnh `ogiZ0b`, kiểm tra project/prompt của scene đang gửi và gắn **chính request object đó** với scene trước khi chuyển sang prompt tiếp theo. Response trả về media ID dùng để định vị card bằng `data-media-id`, nên prompt trùng và ảnh hoàn tất lệch thứ tự không làm đảo tên. Không tự gọi lại API nội bộ. Nếu Google đổi schema, trả lỗi hoặc không có đủ ID, runner báo lỗi và giữ bảng ánh xạ; không đoán theo thứ tự card. Khi timeout, response đến muộn không được đưa lại vào danh sách đổi tên.
+
+ID phải duy nhất, dùng được làm tên file trên Windows. ID thiếu/rỗng dùng `SC1`, `SC2`, ...; ID trùng hoặc không hợp lệ bị từ chối trước khi gửi prompt. Runner cuộn danh sách CDK để tìm card chưa được dựng trong DOM khi batch dài, vẫn kiểm tra đúng media ID. Giữ project ở chế độ xem có các ảnh vừa tạo, xóa bộ lọc tìm kiếm và tránh thao tác thủ công hoặc chạy extension đồng thời trong lúc runner hoạt động.
 
 Hai lệnh cũng tự mở Chrome khi cần. Nếu chưa thấy giao diện project, runner nhắc đăng nhập/mở project rồi nhấn Enter. Dữ liệu tài khoản chỉ lưu trong profile Chrome, không xuất cookies ra JSON. Thư mục `chrome_data/` và `chrome.log` đã được bỏ qua trong Git. Cách mở Chrome và lưu profile dựa trên `google_flow_automation.py` mà bạn cung cấp; runner không tải extension và không dùng persistent context do Playwright sở hữu, để giữ Chrome mở khi Python kết thúc.
 
@@ -111,11 +135,11 @@ python automation.py generate --input /path/to/scenes.json --cdp-url http://127.
 
 `--project-url` ưu tiên chọn tab đã mở; nếu chưa có tab project tương ứng, runner mở project để bạn đăng nhập. Ưu tiên URL trùng hoàn toàn, sau đó cùng project ID (cho phép khác query/hash). Không truyền cờ URL: tự đọc `project_url` từ `config.json`. Khi có nhiều tab của cùng project, ưu tiên URL trùng hoàn toàn, rồi tab có `document.hasFocus()`; nếu vẫn mơ hồ thì báo lỗi. Python không có API tương đương `chrome.tabs.query({active:true,currentWindow:true})`; đây là khác biệt có chủ ý ở tầng chọn tab. Runner đưa tab được chọn ra trước.
 
-Dữ liệu nhận mảng scene hoặc object `{"scenes": [...]}` giống Side Panel. Chỉ kiểm tra JSON và mảng không rỗng; không thêm schema validation cho các scene mà extension không kiểm tra. Giữ nguyên mọi giá trị scene và để workflow JavaScript xử lý. `id` falsy dùng `SC1`, `SC2`, ...; `prompt` dùng `(scene.prompt || "").trim()`; `character` được ép chuỗi, tách `;`, trim và bỏ tên rỗng. Trường bổ sung như `character_info`, `subtitle_ids`, `motion`, `start_at`, `end_at` giữ trong dữ liệu nhưng workflow không sử dụng.
+Dữ liệu nhận mảng scene hoặc object `{"scenes": [...]}` giống Side Panel. `generate` mặc định kiểm tra thêm ID để đặt tên file an toàn; `--submit-only` và `rename` giữ cách xử lý đầu vào cũ. `prompt` dùng `(scene.prompt || "").trim()`; `character` được ép chuỗi, tách `;`, trim và bỏ tên rỗng. Trường bổ sung như `character_info`, `subtitle_ids`, `motion`, `start_at`, `end_at` giữ trong dữ liệu nhưng workflow không sử dụng.
 
 Mẫu có ba scene với nhân vật khác nhau, gồm scene không có nhân vật. Tạo asset tên **Robot Lam**, **Robot Cam** trong project thử nghiệm hoặc thay tên trong JSON bằng asset đã có. Runner không tự tạo asset; asset thiếu khi side-nav tồn tại sẽ báo lỗi giống extension.
 
-Ctrl+C gửi `STOP_GENERATION`, chờ điểm kiểm tra dừng hiện có của workflow rồi ngắt CDP. Không rollback thao tác đã gửi. Các khoảng sleep không bị cắt ngang; nếu dừng trong scene cuối, workflow gốc đôi khi vẫn báo COMPLETED sau khi hoàn tất scene đó. CLI vẫn trả mã 130 nếu đã nhận Ctrl+C. Các lần Ctrl+C tiếp theo trong workflow không tạo lệnh dừng mới. Mã thoát: 0 hoàn thành, 1 lỗi, 130 người dùng dừng. Không gọi `browser.close()`, `context.close()` hay `page.close()` trong runner; Chrome và các tab vẫn mở. Đóng/điều hướng tab hoặc mất kết nối CDP làm runner báo lỗi.
+Ctrl+C gửi `STOP_GENERATION`, chờ điểm kiểm tra dừng hiện có khi gửi prompt. Khi đang chờ kết quả, runner kiểm tra dừng mỗi 200ms; thao tác đổi tên/tải đang thực hiện kết thúc hoặc hết timeout trước khi thoát. Không rollback lượt tạo đã gửi. Bảng ánh xạ giữ kết quả đã có và đánh dấu các scene chưa hoàn tất là `stopped`; lần chạy bị ngắt ngoài ý muốn dùng `interrupted`. Không tự tiếp tục hoặc gửi lại lượt tạo. CLI trả mã 130 nếu đã nhận Ctrl+C, 1 nếu lỗi, 0 nếu hoàn thành. Chrome và các tab vẫn mở.
 
 ## Luồng thực tế đã xác định
 
@@ -123,8 +147,8 @@ Ctrl+C gửi `STOP_GENERATION`, chờ điểm kiểm tra dừng hiện có của
 - Background gọi `chrome.sidePanel.setPanelBehavior({openPanelOnActionClick:true})`. Không có `action.default_popup`; `popup.html`/`popup.js` còn trong repo nhưng không được manifest gắn vào action.
 - Side Panel đọc/dán/upload JSON, lưu `savedJson`, tìm/focus tab, ping rồi inject `content.js` nếu cần (chờ 300ms sau inject). Hai nút gọi `START_GENERATION` và `START_RENAME`; nút dừng gọi `STOP_GENERATION`.
 - Generation: chọn Image một lần → tìm ProseMirror (thiếu thì đợi 2000ms và thử lại một lần) → từng scene theo thứ tự. **`configureSettings()` không được gọi**: không tự chọn tỷ lệ hay output count, không có subcommand settings.
-- Từng scene: xóa prompt/chip → gắn từng character → chèn prompt → tìm nút tạo → background kiểm tra project, đọc lại tọa độ và gửi mousePressed/mouseReleased → chờ editor trống → chờ 4000ms. Hoàn thành nghĩa là đã gửi prompt, **không xác nhận ảnh đã render thành công**.
-- Rename chạy độc lập; generate không tự gọi rename. Rename bỏ qua scene có prompt rỗng, tìm bằng toàn bộ prompt, đổi tên tất cả `flow-grid-tile-container` hiện có theo thứ tự DOM. Không tự lọc card, chờ render hoặc tải ảnh.
+- Từng scene: xóa prompt/chip → gắn từng character → chèn prompt → tìm nút tạo → đọc lại tọa độ và gửi mousePressed/mouseReleased → ghi nhận request của scene → chờ editor trống → chờ 4000ms. Sau khi gửi xong, Python thu kết quả, kiểm tra ánh xạ, đổi tên theo media ID và tải ảnh. `COMPLETED` chỉ in sau khi các bước đó thành công; `--submit-only` chỉ xác nhận đã gửi prompt như trước.
+- Lệnh `rename` cũ vẫn độc lập: tìm bằng prompt và đổi tên tất cả card trong kết quả theo thứ tự DOM. Lệnh này có thể khớp cả ảnh cũ khi prompt trùng. `generate` dùng `flow_results.py` để đổi tên đúng kết quả của từng request, không gọi hàm tìm theo prompt này.
 
 ## Bảng đối chiếu
 
@@ -181,6 +205,6 @@ python -m unittest -v
 node --test background.test.js content.test.js
 ```
 
-Test Python kiểm tra tự mở Chrome local, lưu phiên giả qua lần khởi động lại, ngắt CDP vẫn giữ Chrome, lệnh login không cần scenes, schema đầu vào, CLI, snapshot nguyên byte và chạy subprocess CLI thật qua CDP trên Chrome headless riêng với trang HTML giả lập. Các test browser mặc định dùng `/usr/bin/google-chrome`; đặt biến `FLOW_TEST_CHROME` nếu đường dẫn Chrome khác. Test tạo và đóng **Chrome của test**, không kết nối Chrome của người dùng. Không thay thời gian chờ trong workflow.
+Test Python kiểm tra tự mở Chrome local, lưu phiên giả qua lần khởi động lại, ngắt CDP vẫn giữ Chrome, login, schema, CLI và snapshot nguyên byte. Test batch qua subprocess/CDP mô phỏng prompt trùng, response hoàn tất ngược thứ tự và thứ tự DOM đảo ngược; test unit kiểm tra schema lạ, thiếu/trùng ID, lỗi network/HTTP, timeout, response đến muộn và dừng giữa các output. Các test gửi POSIX SIGINT bị bỏ qua trên Windows vì subprocess không hỗ trợ tín hiệu này; test logic dừng kết quả vẫn chạy. Các test browser mặc định dùng `/usr/bin/google-chrome`; đặt `FLOW_TEST_CHROME` nếu đường dẫn Chrome khác. Test tạo và đóng **Chrome của test**, không kết nối Chrome của người dùng.
 
 Đối chiếu thủ công trên Google Flow thật: dùng cùng file JSON, cùng project/model/settings ban đầu, chạy từng công cụ riêng; kiểm tra nhân vật của từng scene (kể cả scene rỗng), thứ tự prompt, lỗi asset thiếu, tên card/hậu tố và Ctrl+C. Runner không tự thay cấu hình model/tỷ lệ/output. Kết quả fixture không chứng minh UI Google Flow hiện tại hoặc việc sinh ảnh trên tài khoản thật đã hoạt động.

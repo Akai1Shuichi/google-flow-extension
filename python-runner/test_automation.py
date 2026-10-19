@@ -87,7 +87,7 @@ class StartupTests(unittest.IsolatedAsyncioTestCase):
             launch.return_value.poll.return_value = None
             self.assertIs(await automation.connect_browser(playwright, args), browser)
             command = launch.call_args.args[0]
-            self.assertIn('--user-data-dir=/tmp/flow-profile-test', command)
+            self.assertIn(f'--user-data-dir={Path("/tmp/flow-profile-test").resolve()}', command)
             self.assertIn('--remote-debugging-port=9222', command)
             self.assertIn(args.project_url, command)
             launch.return_value.terminate.assert_not_called()
@@ -118,7 +118,7 @@ FIXTURE = '''<!doctype html><meta charset="utf-8">
 <input class="search-input"><button aria-label="Clear search input">Clear search</button>
 <flow-grid-tile-container><button aria-label="More options">More</button></flow-grid-tile-container>
 <flow-grid-tile-container><button aria-label="More options">More</button></flow-grid-tile-container>
-<div class="cdk-overlay-pane" hidden><button>Rename</button></div>
+<div class="cdk-overlay-pane" hidden><button role="menuitem">Rename</button></div>
 <div class="footer-left"><input class="editable-text-input editing" hidden></div>
 <script>
 window.records = []; window.renamed = []; let selected; let tileIndex;
@@ -167,19 +167,21 @@ class BrowserTests(unittest.IsolatedAsyncioTestCase):
         await self.pw.stop()
         self.temp.cleanup()
 
-    async def cli(self, command, scenes):
+    async def cli(self, command, scenes, *, track_results=False):
         path = Path(self.temp.name) / 'input.json'
         path.write_text(json.dumps(scenes), encoding='utf-8')
         return await asyncio.create_subprocess_exec(
             sys.executable, str(automation.ROOT / 'automation.py'), command,
             '--input', str(path), '--cdp-url', f'http://127.0.0.1:{self.port}',
             '--project-url', self.page.url,
+            *(['--no-download', '--results-dir', self.temp.name] if track_results else ['--submit-only']),
             stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
 
     async def result(self, process):
         stdout, stderr = await asyncio.wait_for(process.communicate(), 45)
         return process.returncode, stdout.decode(), stderr.decode()
 
+    @unittest.skipIf(os.name == 'nt', 'Windows subprocess.send_signal không hỗ trợ POSIX SIGINT')
     async def test_ctrl_c_during_login_keeps_browser(self):
         process = await asyncio.create_subprocess_exec(
             sys.executable, str(automation.ROOT / 'automation'), 'login',
@@ -230,6 +232,70 @@ class BrowserTests(unittest.IsolatedAsyncioTestCase):
             {'trusted': True, 'prompt': 'Second', 'characters': []},
             {'trusted': True, 'prompt': '\u00a0Third', 'characters': ['B']},
         ])
+
+    async def test_batch_names_by_request_with_identical_prompts_and_reversed_results(self):
+        # The second request finishes first; DOM order is also reversed within a batch.
+        async def generate(route):
+            request = route.request
+            from urllib.parse import parse_qs
+            body = json.loads(parse_qs(request.post_data)['f.req'][0])
+            call = json.loads(body[0][0][1])
+            number = call[0]
+            await asyncio.sleep(8 if number == 1 else 0.1)
+            ids = ['11111111-1111-4111-8111-111111111111',
+                   '22222222-2222-4222-8222-222222222222'] if number == 1 else [
+                   '33333333-3333-4333-8333-333333333333',
+                   '44444444-4444-4444-8444-444444444444']
+            payload = [[[media_id, None, 'entity-' + media_id] for media_id in ids], []]
+            wire = json.dumps([['wrb.fr', 'ogiZ0b', json.dumps(payload), None]])
+            await route.fulfill(body=")]}'\n\n" + str(len(wire)) + '\n' + wire,
+                                content_type='application/json')
+
+        await self.page.route('**/data/batchexecute*', generate)
+        await self.page.evaluate('''() => {
+          let n = 0;
+          document.querySelector('flow-generate-icon-button button').onclick = async () => {
+            const prompt = editor.innerText; editor.innerText = '';
+            const call = [++n, [0, 1].map(() => {
+              const row = []; row[7] = []; row[7][5] = 'offline-fixture';
+              row[8] = [[[prompt]]]; return row;
+            })];
+            const response = await fetch('/_/AiSandboxAngularFrontend/data/batchexecute', {
+              method: 'POST', body: new URLSearchParams({
+                'f.req': JSON.stringify([[['ogiZ0b', JSON.stringify(call), null, 'generic']]])
+              })
+            });
+            const wire = await response.text();
+            const rows = JSON.parse(JSON.parse(wire.split('\\n').pop())[0][2])[0];
+            for (const row of rows.reverse()) {
+              const tile = document.createElement('flow-grid-tile-container');
+              tile.setAttribute('aria-label', 'Original');
+              tile.innerHTML = `<img data-media-id="${row[0]}"><button aria-label="More options">More</button>`;
+              tile.querySelector('button').onclick = () => {
+                document.querySelector('.cdk-overlay-pane').hidden = false;
+                document.querySelector('.editing').onkeydown = event => {
+                  if (event.key === 'Enter') {
+                    tile.setAttribute('aria-label', event.target.value);
+                    renamed.push({mediaId: row[0], name: event.target.value});
+                    event.target.hidden = true;
+                  }
+                };
+              };
+              document.body.prepend(tile);
+            }
+          };
+        }''')
+        process = await self.cli('generate', [
+            {'id': 'SC01', 'prompt': 'same'}, {'id': 'SC02', 'prompt': 'same'}], track_results=True)
+        code, stdout, stderr = await self.result(process)
+        self.assertEqual(code, 0, stdout + stderr)
+        actual = {row['mediaId']: row['name'] for row in await self.page.evaluate('renamed')}
+        self.assertEqual(actual, {
+            '11111111-1111-4111-8111-111111111111': 'SC01_1',
+            '22222222-2222-4222-8222-222222222222': 'SC01_2',
+            '33333333-3333-4333-8333-333333333333': 'SC02_1',
+            '44444444-4444-4444-8444-444444444444': 'SC02_2',
+        })
         self.assertTrue(self.browser.is_connected())
         self.assertEqual(await self.page.title(), '')
         self.assertIsNone(await self.page.evaluate('window.__flowRunner'))  # Isolated world.
@@ -250,6 +316,35 @@ class BrowserTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(await self.page.evaluate('renamed'), [
             {'index': 0, 'name': 'SC99'}, {'index': 1, 'name': 'SC99_1'}])
         self.assertTrue(self.browser.is_connected())
+
+    async def test_rename_finds_media_in_virtual_scroll_viewport(self):
+        from flow_results import rename_card
+        media_id = '11111111-1111-4111-8111-111111111111'
+        await self.page.evaluate('''id => {
+          const viewport = document.createElement('cdk-virtual-scroll-viewport');
+          viewport.className = 'tiles-container';
+          viewport.style.cssText = 'display:block;height:100px;overflow:auto';
+          viewport.innerHTML = '<div style="height:1000px"></div>';
+          viewport.onscroll = () => {
+            if (viewport.scrollTop < 100 || viewport.querySelector('flow-grid-tile-container')) return;
+            const tile = document.createElement('flow-grid-tile-container');
+            tile.setAttribute('aria-label', 'Before');
+            tile.style.display = 'block';
+            tile.innerHTML = `<img data-media-id="${id}"><button aria-label="More options">More</button>`;
+            tile.querySelector('button').onclick = () => {
+              document.querySelector('.cdk-overlay-pane').hidden = false;
+              document.querySelector('.editing').onkeydown = e => {
+                if (e.key === 'Enter') tile.setAttribute('aria-label', e.target.value);
+              };
+            };
+            viewport.prepend(tile);
+          };
+          document.body.prepend(viewport);
+        }''', media_id)
+        await rename_card(self.page, media_id, 'SC99', timeout=1500)
+        tile = self.page.locator('flow-grid-tile-container').filter(
+            has=self.page.locator(f'[data-media-id="{media_id}"]'))
+        self.assertEqual(await tile.get_attribute('aria-label'), 'SC99')
 
     async def test_rename_suffixes_and_skip_empty_prompt(self):
         process = await self.cli('rename', [{'id': 'SC42', 'prompt': 'Needle'}, {'prompt': ''}])
@@ -290,6 +385,7 @@ class BrowserTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn('prompt vẫn còn trong ô nhập', stderr)
         self.assertNotIn('COMPLETED', stdout)
 
+    @unittest.skipIf(os.name == 'nt', 'Windows subprocess.send_signal không hỗ trợ POSIX SIGINT')
     async def test_sigint_stops_at_original_checkpoint_and_keeps_chrome(self):
         process = await self.cli('generate', [{'prompt': 'First'}, {'prompt': 'Second'}])
         output = []
@@ -356,11 +452,21 @@ class AutoLaunchBrowserTests(unittest.IsolatedAsyncioTestCase):
                     browser = await automation.connect_browser(playwright, args)
                 self.assertIn('fixture_session', [c['name'] for c in await browser.contexts[0].cookies()])
             finally:
+                if 'browser' in locals() and browser.is_connected():
+                    try:
+                        session = await browser.new_browser_cdp_session()
+                        await session.send('Browser.close')  # Only this test-owned Chrome.
+                    except Exception:
+                        pass
                 for process in processes:
                     if process.poll() is None:
-                        process.terminate()  # Only the headless Chrome this test created.
-                        await asyncio.to_thread(process.wait, 10)
+                        try:
+                            await asyncio.to_thread(process.wait, 5)
+                        except automation.subprocess.TimeoutExpired:
+                            process.terminate()  # Only the headless Chrome this test created.
+                            await asyncio.to_thread(process.wait, 10)
                 await playwright.stop()
+                await asyncio.sleep(.5)  # Let Chrome's child processes release profile locks.
 
 
 if __name__ == '__main__':

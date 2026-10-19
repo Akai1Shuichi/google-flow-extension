@@ -2,6 +2,7 @@
   let listener;
   let nextId = 0;
   const pending = new Map();
+  let sceneIndex = 0;
   const emit = message => globalThis.__flowPythonEmit(JSON.stringify(message));
   const chrome = {runtime: {
     onMessage: {addListener(callback) { listener = callback; }},
@@ -10,7 +11,7 @@
         const id = ++nextId;
         return new Promise(resolve => {
           pending.set(id, resolve);
-          emit({kind: 'trusted-click', id});
+          emit({kind: 'trusted-click', id, sceneIndex: sceneIndex++});
         });
       }
       emit({kind: 'progress', data: message.data});
@@ -22,6 +23,7 @@
   /* WORKFLOW_SNAPSHOT */
   globalThis.__flowRunner = {
     dispatch(request) {
+      if (request.action === 'START_GENERATION') sceneIndex = 0;
       let response;
       listener(request, {}, value => { response = value; });
       return response;

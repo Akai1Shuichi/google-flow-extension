@@ -247,6 +247,7 @@ class Runner:
         self.done = asyncio.get_running_loop().create_future()
         self.tasks = set()
         self.stop_requested = False
+        self.results = None
 
     async def evaluate(self, expression, value=False):
         result = await self.session.send("Runtime.evaluate", {
@@ -300,13 +301,17 @@ class Runner:
             print(f'[{message["level"]}] ' + " ".join(message["args"]), flush=True)
         elif kind == "progress":
             data = message["data"]
-            print(f'[{data["status"]} {data["current"]}/{data["total"]}] {data["text"]}', flush=True)
+            if self.results and data['status'] == 'COMPLETED':
+                print('[SUBMITTED] Đã gửi toàn bộ prompt; đang chờ ảnh hoàn tất.', flush=True)
+            else:
+                print(f'[{data["status"]} {data["current"]}/{data["total"]}] {data["text"]}', flush=True)
             if data.get("error"):
                 print(f'Lỗi cụ thể: {data["error"]}', file=sys.stderr, flush=True)
             if data["status"] in ("COMPLETED", "STOPPED", "ERROR") and not self.done.done():
                 self.done.set_result(data)
         elif kind == "trusted-click":
-            response = await self.trusted_generate_click()
+            response = (await self.results.click(message.get('sceneIndex'), self.trusted_generate_click)
+                        if self.results else await self.trusted_generate_click())
             await self.evaluate(f'globalThis.__flowRunner.reply({message["id"]}, {json.dumps(response)});')
 
     async def trusted_generate_click(self):
@@ -346,7 +351,12 @@ class Runner:
         return await self.done
 
     async def run_generation(self, scenes):
-        return await self.run("START_GENERATION", scenes)
+        result = await self.run("START_GENERATION", scenes)
+        if self.results and result['status'] in ('COMPLETED', 'ERROR') and not self.stop_requested:
+            await self.results.finish(lambda: self.stop_requested)
+            if result['status'] == 'COMPLETED' and not self.stop_requested:
+                print(f'[COMPLETED {len(scenes)}/{len(scenes)}] Đã tạo và đặt tên ảnh.', flush=True)
+        return result
 
     async def run_rename(self, scenes):
         return await self.run("START_RENAME", scenes)
@@ -358,6 +368,8 @@ class Runner:
 
     async def detach(self):
         # No Browser.close, Context.close, Page.close or Browser.close CDP command.
+        if self.results:
+            await self.results.close(stopped=self.stop_requested)
         if self.tasks:
             await asyncio.gather(*list(self.tasks), return_exceptions=True)
         if self.session:
@@ -365,8 +377,14 @@ class Runner:
 
 
 async def run_cli(args):
+    args.command = args.command or 'generate'
     args = resolve_config(args)
+    if not math.isfinite(args.generation_timeout) or args.generation_timeout <= 0:
+        raise ValueError('--generation-timeout phải là số giây dương hữu hạn.')
     scenes = None if args.command == "login" else load_scenes(args.input)
+    if args.command == 'generate' and not args.submit_only:
+        from flow_results import scene_names
+        scene_names(scenes)  # Validate IDs before sending any paid generation.
     try:
         from playwright.async_api import async_playwright
     except ImportError as exc:
@@ -386,6 +404,10 @@ async def run_cli(args):
         await page.bring_to_front()
         runner = Runner(page)
         await runner.install()
+        if args.command == 'generate' and not args.submit_only:
+            from flow_results import BatchResults
+            runner.results = BatchResults(page, scenes, args.results_dir,
+                None if args.no_download else args.output_dir, timeout=args.generation_timeout)
 
         def request_stop():
             nonlocal stop_task
@@ -431,6 +453,11 @@ def parser():
         target.add_argument("--chrome-path", default=default, help="Đường dẫn Chrome nếu không tự tìm thấy")
         target.add_argument("--no-launch", action="store_true", default=default if suppress else False, help="Chỉ kết nối CDP, không tự mở Chrome")
         target.add_argument("--connect-timeout", type=int, default=default if suppress else 10000, metavar="MS", help="Timeout kết nối CDP, mặc định 10000ms")
+        target.add_argument('--submit-only', action='store_true', default=default if suppress else False, help='Chỉ gửi prompt như luồng cũ, không theo dõi/đổi tên/tải ảnh')
+        target.add_argument('--no-download', action='store_true', default=default if suppress else False, help='Chỉ đổi tên card trên Flow, không tải file')
+        target.add_argument('--output-dir', default=default if suppress else str(ROOT / 'output'), help='Thư mục ảnh tải về; mỗi lần chạy có thư mục riêng')
+        target.add_argument('--results-dir', default=default if suppress else str(ROOT / 'results'), help='Thư mục lưu bảng ánh xạ scene và media ID')
+        target.add_argument('--generation-timeout', type=float, default=default if suppress else 180, help='Số giây tối đa chờ response tạo ảnh (mặc định 180)')
     options(result)
     for name, help_text in (("generate", "Tạo ảnh theo thứ tự scenes"), ("rename", "Tìm theo prompt và đổi tên cards"), ("login", "Mở Chrome và đăng nhập Google, lưu phiên vào profile")):
         options(commands.add_parser(name, help=help_text), suppress=True)

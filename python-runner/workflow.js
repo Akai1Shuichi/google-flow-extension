@@ -1,4 +1,6 @@
 (() => {
+  if (globalThis.__flowContentInstalled) return;
+  globalThis.__flowContentInstalled = true;
   let isRunning = false;
   let shouldStop = false;
 
@@ -20,7 +22,7 @@
       return true;
     } else if (request.action === "STOP_GENERATION") {
       shouldStop = true;
-      isRunning = false;
+      globalThis.FlowExtensionResults?.stop().catch(console.error);
       sendResponse({ status: "STOPPING" });
       return true;
     } else if (request.action === "START_RENAME") {
@@ -406,6 +408,7 @@
     const rect = submitButton.getBoundingClientRect();
     const response = await chrome.runtime.sendMessage({
       action: "TRUSTED_GENERATE_CLICK",
+      ...globalThis.FlowExtensionResults?.clickMeta(index),
       x: rect.left + rect.width / 2,
       y: rect.top + rect.height / 2
     });
@@ -432,7 +435,11 @@
 
   // --- Toàn bộ Workflow ---
   async function runWorkflow({ scenes }) {
+    const results = globalThis.FlowExtensionResults;
+    let tracking = false;
+    let finishing = false;
     try {
+      if (results) { await results.start(scenes); tracking = true; }
       updateProgress(0, scenes.length, "Đang chọn chế độ Image...");
       await selectImagesTab();
       if (shouldStop) { updateProgress(0, scenes.length, "Đã dừng.", "STOPPED"); isRunning = false; return; }
@@ -459,11 +466,18 @@
         await processScene(editor, scenes[i], i, scenes.length);
       }
 
-      updateProgress(scenes.length, scenes.length, "Hoàn thành toàn bộ!", "COMPLETED");
+      if (tracking) { finishing = true; await results.finish(updateProgress, () => shouldStop); }
+      if (shouldStop) { updateProgress(0, scenes.length, "Đã dừng.", "STOPPED"); return; }
+      updateProgress(scenes.length, scenes.length, tracking ? "Đã tạo và đặt tên ảnh theo ID!" : "Hoàn thành toàn bộ!", "COMPLETED");
     } catch (err) {
+      // Earlier paid requests still get processed if a later submission fails.
+      if (tracking && !finishing && !shouldStop) {
+        try { await results.finish(updateProgress, () => shouldStop); } catch (_) {}
+      }
       console.error("[Flow AI Auto] Lỗi workflow:", err);
-      updateProgress(0, scenes.length, "Lỗi: " + err.message, "ERROR", err.message);
+      updateProgress(0, scenes.length, shouldStop ? "Đã dừng." : "Lỗi: " + err.message, shouldStop ? "STOPPED" : "ERROR", shouldStop ? null : err.message);
     } finally {
+      if (tracking) await results.end(shouldStop).catch(console.error);
       isRunning = false;
       shouldStop = false;
     }
