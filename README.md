@@ -1,6 +1,6 @@
 # Google Flow AI Auto-Generator
 
-Extension Chrome (Manifest V3, bản 1.4.0) tạo ảnh hàng loạt trong [Google Flow](https://flow.google.com/) và tự đổi tên đúng card theo ID scene. Giao diện điều khiển nằm trong Side Panel. Cần Chrome 118 trở lên.
+Extension Chrome (Manifest V3, bản 1.2) tạo ảnh hàng loạt trong [Google Flow](https://flow.google.com/) và tự đổi tên đúng card theo ID scene. Giao diện điều khiển nằm trong Side Panel. Cần Chrome 118 trở lên.
 
 ## Cài đặt
 
