@@ -221,15 +221,6 @@ textarea {
   background: linear-gradient(135deg, #3b82f6, #2563eb);
 }
 
-.btn-secondary {
-  background: linear-gradient(135deg, #059669, #047857);
-  color: white;
-}
-
-.btn-secondary:hover {
-  background: linear-gradient(135deg, #10b981, #059669);
-}
-
 .btn-danger {
   background-color: #dc2626;
   color: white;

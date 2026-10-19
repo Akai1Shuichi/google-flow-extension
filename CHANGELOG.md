@@ -2,6 +2,16 @@
 
 Các thay đổi đáng chú ý của Google Flow AI Auto-Generator được ghi theo phiên bản extension trong `manifest.json`.
 
+## [1.5.0]
+- Tự động đổi tên hàng loạt theo tên cung cấp trong danh sách scene JSON, không còn phải đổi tên thủ công như trước.
+
+## [1.4.0]
+
+- Ghép ánh xạ scene → request → media ID vào extension, giữ render song song và đổi đúng tên khi prompt trùng hoặc kết quả về lệch thứ tự.
+- Tự đổi tên đúng card theo media ID sau khi tạo; không tự tải ảnh về máy.
+- Lưu ánh xạ/trạng thái cục bộ, xử lý timeout, dừng, mất debugger và chuyển project; không lưu token hoặc URL có chữ ký.
+- Bổ sung kiểm thử core/background và kiểm thử extension thật trong Chromium với dữ liệu HTTPS local.
+
 ## [1.0]
 
 - Tạo ảnh lần lượt từ danh sách scene JSON trong Google Flow.

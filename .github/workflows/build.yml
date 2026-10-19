@@ -31,7 +31,7 @@ jobs:
           node-version: '22'
 
       - name: Run tests
-        run: node --test background.test.js content.test.js
+        run: node --test *.test.js
 
       - name: Prepare release notes from changelog
         run: |

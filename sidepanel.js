@@ -7,24 +7,20 @@ document.addEventListener("DOMContentLoaded", () => {
   const progressBar = document.getElementById("progressBar");
   const statusText = document.getElementById("statusText");
   const startBtn = document.getElementById("startBtn");
-  const renameBtn = document.getElementById("renameBtn");
   const stopBtn = document.getElementById("stopBtn");
+  let runningTabId = null;
 
   // Sample data definition
   const SAMPLE_SCENES = [
     {
       "id": "SC01",
       "character": "Người que",
-      "character_info": "Nhân vật người que, đầu tròn, tay chân nét đơn theo ảnh tham chiếu.",
-      "prompt": "Dùng ảnh đính kèm làm tham chiếu nhân vật, giữ nguyên thiết kế, đầu tròn và tay chân nét đơn. Nhân vật cúi bên đống than trong hang đá, vẻ tập trung, nhìn xuống than. Trung cảnh nhìn nghiêng, vách đá nâu phía sau, vài đốm than đỏ yếu dưới lớp tro xám; ánh sáng xanh nhạt từ cửa hang bên phải. Minh họa 2D viền đen, màu phẳng, tỷ lệ 16:9. Một nhân vật, một thời điểm chính. Không chữ, phụ đề, logo hoặc watermark.",
-      "subtitle_ids": [1, 2]
+      "prompt": "Dùng ảnh đính kèm làm tham chiếu nhân vật, giữ nguyên thiết kế, đầu tròn và tay chân nét đơn. Nhân vật cúi bên đống than trong hang đá, vẻ tập trung, nhìn xuống than. Trung cảnh nhìn nghiêng, vách đá nâu phía sau, vài đốm than đỏ yếu dưới lớp tro xám; ánh sáng xanh nhạt từ cửa hang bên phải. Minh họa 2D viền đen, màu phẳng, tỷ lệ 16:9. Một nhân vật, một thời điểm chính. Không chữ, phụ đề, logo hoặc watermark."
     },
     {
       "id": "SC02",
       "character": "",
-      "character_info": "",
-      "prompt": "Cận cảnh đống than trong hang đá, vài đốm đỏ yếu dưới lớp tro xám và một làn khói mỏng, không có ngọn lửa. Vách đá nâu phía sau, ánh sáng xanh nhạt từ bên phải. Minh họa 2D viền đen, màu phẳng, tỷ lệ 16:9. Không đưa nhân vật trong ảnh tham chiếu vào cảnh này, kể cả khi ảnh đó được đính kèm. Không chữ, phụ đề, logo hoặc watermark.",
-      "subtitle_ids": [3]
+      "prompt": "Cận cảnh đống than trong hang đá, vài đốm đỏ yếu dưới lớp tro xám và một làn khói mỏng, không có ngọn lửa. Vách đá nâu phía sau, ánh sáng xanh nhạt từ bên phải. Minh họa 2D viền đen, màu phẳng, tỷ lệ 16:9. Không đưa nhân vật trong ảnh tham chiếu vào cảnh này, kể cả khi ảnh đó được đính kèm. Không chữ, phụ đề, logo hoặc watermark."
     }
   ];
 
@@ -59,7 +55,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const reader = new FileReader();
     reader.onload = (event) => {
       try {
-        const parsed = JSON.parse(event.target.result);
+        const parsed = FlowScenesJson.parse(event.target.result);
         if (Array.isArray(parsed)) {
           scenesJsonArea.value = JSON.stringify(parsed, null, 2);
         } else if (parsed.scenes && Array.isArray(parsed.scenes)) {
@@ -78,9 +74,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Save settings on change
   function saveState() {
-    chrome.storage.local.set({
-      savedJson: scenesJsonArea.value
-    });
+    chrome.storage.local.set({ savedJson: scenesJsonArea.value });
   }
 
   scenesJsonArea.addEventListener("input", saveState);
@@ -94,7 +88,7 @@ document.addEventListener("DOMContentLoaded", () => {
       return null;
     }
     try {
-      const parsed = JSON.parse(raw);
+      const parsed = FlowScenesJson.parse(raw);
       let list = [];
       if (Array.isArray(parsed)) {
         list = parsed;
@@ -151,7 +145,7 @@ document.addEventListener("DOMContentLoaded", () => {
         console.log("[SidePanel] Đang chèn content.js vào tab...");
         await chrome.scripting.executeScript({
           target: { tabId: tabId },
-          files: ["content.js"]
+          files: ["batch-content.js", "content.js"]
         });
         // Chờ 300ms sau khi inject
         await new Promise(r => setTimeout(r, 300));
@@ -167,6 +161,8 @@ document.addEventListener("DOMContentLoaded", () => {
   startBtn.addEventListener("click", async () => {
     const scenes = getScenesList();
     if (!scenes) return;
+    try { FlowBatchCore.sceneNames(scenes); }
+    catch (error) { jsonError.textContent = error.message; return; }
 
     jsonError.textContent = "";
     statusText.textContent = "Đang tìm tab Google Flow...";
@@ -192,7 +188,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     startBtn.style.display = "none";
-    if (renameBtn) renameBtn.style.display = "none";
+    runningTabId = tab.id;
     stopBtn.style.display = "block";
     statusText.textContent = "Đang khởi động tiến trình...";
 
@@ -205,70 +201,32 @@ document.addEventListener("DOMContentLoaded", () => {
       if (chrome.runtime.lastError) {
         jsonError.textContent = "Lỗi gửi lệnh: " + chrome.runtime.lastError.message;
         resetUI();
+      } else if (response?.status !== 'STARTED') {
+        statusText.textContent = 'Tab đang chạy một tiến trình khác. Chờ hoàn tất hoặc bấm Dừng lại.';
       }
     });
   });
-
-  // Rename cards manually
-  if (renameBtn) {
-    renameBtn.addEventListener("click", async () => {
-      const scenes = getScenesList();
-      if (!scenes) return;
-
-      jsonError.textContent = "";
-      statusText.textContent = "Đang tìm tab Google Flow...";
-      progressSection.style.display = "flex";
-      progressBar.style.width = "0%";
-
-      const tab = await findGoogleFlowTab();
-      if (!tab) {
-        jsonError.textContent = "Không tìm thấy tab Google Flow nào đang mở! Hãy mở tab https://flow.google.com/project/... rồi thử lại.";
-        progressSection.style.display = "none";
-        return;
-      }
-
-      await chrome.tabs.update(tab.id, { active: true });
-
-      statusText.textContent = "Đang kết nối tới trang Google Flow...";
-      const ready = await ensureContentScriptInjected(tab.id);
-      if (!ready) {
-        jsonError.textContent = "Không thể kết nối vào tab Google Flow. Vui lòng bấm F5 lại trang Google Flow rồi thử lại!";
-        progressSection.style.display = "none";
-        return;
-      }
-
-      startBtn.style.display = "none";
-      renameBtn.style.display = "none";
-      stopBtn.style.display = "block";
-      statusText.textContent = "Đang bắt đầu tìm kiếm và đổi tên card...";
-
-      chrome.tabs.sendMessage(tab.id, {
-        action: "START_RENAME",
-        data: {
-          scenes: scenes
-        }
-      }, (response) => {
-        if (chrome.runtime.lastError) {
-          jsonError.textContent = "Lỗi gửi lệnh: " + chrome.runtime.lastError.message;
-          resetUI();
-        }
-      });
-    });
-  }
 
   // Stop automation
   stopBtn.addEventListener("click", async () => {
-    const tab = await findGoogleFlowTab();
+    const tab = runningTabId ? {id: runningTabId} : await findGoogleFlowTab();
     if (tab && tab.id) {
-      chrome.tabs.sendMessage(tab.id, { action: "STOP_GENERATION" });
+      try {
+        const response = await chrome.tabs.sendMessage(tab.id, { action: "STOP_GENERATION" });
+        if (response?.status !== 'STOPPING') throw new Error('Không xác nhận được lệnh dừng.');
+      } catch (error) {
+        jsonError.textContent = error.message;
+        resetUI();
+        return;
+      }
     }
     statusText.textContent = "Đã gửi lệnh dừng...";
-    setTimeout(resetUI, 1200);
   });
 
   // Lắng nghe cập nhật tiến trình từ content.js
-  chrome.runtime.onMessage.addListener((message) => {
+  chrome.runtime.onMessage.addListener((message, sender) => {
     if (message.action === "PROGRESS_UPDATE") {
+      if (runningTabId !== null && sender.tab?.id !== runningTabId) return;
       const { current, total, text, status } = message.data;
       const pct = Math.round((current / total) * 100);
       progressBar.style.width = `${pct}%`;
@@ -289,8 +247,8 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   function resetUI() {
+    runningTabId = null;
     startBtn.style.display = "block";
-    if (renameBtn) renameBtn.style.display = "block";
     stopBtn.style.display = "none";
   }
 });
