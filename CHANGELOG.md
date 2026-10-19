@@ -2,6 +2,9 @@
 
 Các thay đổi đáng chú ý của Google Flow AI Auto-Generator được ghi theo phiên bản extension trong `manifest.json`.
 
+## [1.5.0]
+- Tự động đổi tên hàng loạt theo tên cung cấp trong danh sách scene JSON, không còn phải đổi tên thủ công như trước.
+
 ## [1.4.0]
 
 - Ghép ánh xạ scene → request → media ID vào extension, giữ render song song và đổi đúng tên khi prompt trùng hoặc kết quả về lệch thứ tự.
