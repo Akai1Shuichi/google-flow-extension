@@ -2,6 +2,7 @@
 
 Các thay đổi đáng chú ý của Google Flow AI Auto-Generator được ghi theo phiên bản extension trong `manifest.json`.
 
+
 ## [1.0]
 
 - Tạo ảnh lần lượt từ danh sách scene JSON trong Google Flow.
@@ -15,3 +16,7 @@ Ví dụ: `"character": "Người chồng; Người vợ"` sẽ tìm và gắn c
 
 ## [1.2]
 - Tự động đổi tên ảnh hàng loạt theo tên cung cấp trong danh sách scene JSON, không còn phải đổi tên thủ công như trước.
+
+## [1.3]
+
+- Hỗ trợ nhiều tham chiếu nhân vật ngăn cách bằng dấu chấm phẩy (`;`), dấu phẩy (`,`) hoặc kết hợp cả hai trong trường `character`.

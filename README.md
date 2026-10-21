@@ -36,7 +36,7 @@ Dữ liệu có thể là một mảng hoặc một object chứa mảng `scenes
 ]
 ```
 
-`prompt` phải là chuỗi không rỗng. `id` là tên card/file mong muốn; nếu bỏ trống, extension tự dùng `SC1`, `SC2`, ... ID phải duy nhất, không chứa ký tự cấm hoặc tên dành riêng của Windows. Các lỗi này được kiểm tra trước khi gửi prompt. `character` có thể để trống, chứa một tên, hoặc chứa nhiều tên ngăn cách bằng dấu chấm phẩy (`;`). Extension bỏ khoảng trắng thừa quanh mỗi tên và gắn từng asset trùng tên trước khi gửi prompt. Các trường bổ sung như `character_info` và `subtitle_ids` được giữ trong JSON nhưng không tham gia thao tác tạo ảnh hoặc đổi tên.
+`prompt` phải là chuỗi không rỗng. `id` là tên card/file mong muốn; nếu bỏ trống, extension tự dùng `SC1`, `SC2`, ... ID phải duy nhất, không chứa ký tự cấm hoặc tên dành riêng của Windows. Các lỗi này được kiểm tra trước khi gửi prompt. `character` có thể để trống, chứa một tên, hoặc chứa nhiều tên ngăn cách bằng dấu chấm phẩy (`;`), dấu phẩy (`,`) hoặc kết hợp cả hai, ví dụ `"character": "Người chồng; Người vợ, Người con"`. Extension bỏ khoảng trắng thừa quanh mỗi tên, bỏ qua tên rỗng và gắn từng asset trùng tên trước khi gửi prompt. Các trường bổ sung như `character_info` và `subtitle_ids` được giữ trong JSON nhưng không tham gia thao tác tạo ảnh hoặc đổi tên.
 
 Nội dung JSON đang nhập được lưu cục bộ qua `chrome.storage.local` để có thể mở lại Side Panel mà không phải nhập lại.
 

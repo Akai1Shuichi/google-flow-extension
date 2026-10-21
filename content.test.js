@@ -193,33 +193,38 @@ test('uses the replacement editor after Flow adds an ingredient', async () => {
   assert.equal(updates.at(-1).status, 'COMPLETED');
 });
 
-test('attaches each semicolon-separated character before inserting the prompt', async () => {
-  const { actions, updates } = await runGeneration({ character: 'Người chồng; Người vợ' });
-  assert.ok(actions.includes('insert:@Người chồng'), actions.join(', '));
-  assert.ok(actions.includes('insert:@Người vợ'), actions.join(', '));
-  assert.ok(actions.indexOf('insert:@Người chồng') < actions.indexOf('insert:@Người vợ'), actions.join(', '));
-  assert.ok(actions.indexOf('insert:@Người vợ') < actions.indexOf('insert: A red kite'), actions.join(', '));
-  assert.equal(updates.at(-1).status, 'COMPLETED');
-});
+for (const character of ['Người chồng; Người vợ', 'Người chồng, Người vợ', ' ; Người chồng, ; Người vợ ;, ']) {
+  test(`attaches each character before inserting the prompt: ${character}`, async () => {
+    const { actions, updates } = await runGeneration({ character });
+    assert.deepEqual(actions.filter(action => action.startsWith('insert:@')), [
+      'insert:@Người chồng', 'insert:@Người vợ'
+    ]);
+    assert.ok(actions.includes('insert:@Người chồng'), actions.join(', '));
+    assert.ok(actions.includes('insert:@Người vợ'), actions.join(', '));
+    assert.ok(actions.indexOf('insert:@Người chồng') < actions.indexOf('insert:@Người vợ'), actions.join(', '));
+    assert.ok(actions.indexOf('insert:@Người vợ') < actions.indexOf('insert: A red kite'), actions.join(', '));
+    assert.equal(updates.at(-1).status, 'COMPLETED');
+  });
 
-test('adds both Flow character assets through the preview button', async () => {
-  const { actions, updates } = await runGeneration({ character: 'Người chồng; Người vợ', assetMenu: true });
-  assert.deepEqual(actions.filter(action => action.startsWith('select-asset:')), [
-    'select-asset:Người chồng', 'select-asset:Người vợ'
-  ]);
-  assert.equal(actions.filter(action => action === 'add-to-prompt').length, 2);
-  assert.equal(updates.at(-1).status, 'COMPLETED');
-});
+  test(`adds both Flow character assets through the preview button: ${character}`, async () => {
+    const { actions, updates } = await runGeneration({ character, assetMenu: true });
+    assert.deepEqual(actions.filter(action => action.startsWith('select-asset:')), [
+      'select-asset:Người chồng', 'select-asset:Người vợ'
+    ]);
+    assert.equal(actions.filter(action => action === 'add-to-prompt').length, 2);
+    assert.equal(updates.at(-1).status, 'COMPLETED');
+  });
+  }
 
-test('waits for Start generation to become enabled before clicking', async () => {
-  const { actions, updates } = await runGeneration({ submitDelayChecks: 3 });
-  assert.ok(actions.includes('trusted-generate:120,220'), actions.join(', '));
-  assert.equal(updates.at(-1).status, 'COMPLETED');
-});
+  test('waits for Start generation to become enabled before clicking', async () => {
+    const { actions, updates } = await runGeneration({ submitDelayChecks: 3 });
+    assert.ok(actions.includes('trusted-generate:120,220'), actions.join(', '));
+    assert.equal(updates.at(-1).status, 'COMPLETED');
+  });
 
-test('sends a trusted click to Flow instead of calling HTMLElement.click', async () => {
-  const { actions, updates } = await runGeneration({ fixedPrompt: true, liveRadio: true, menu: false });
-  assert.ok(actions.includes('trusted-generate:120,220'), actions.join(', '));
-  assert.equal(actions.includes('generate'), false);
-  assert.equal(updates.at(-1).status, 'COMPLETED');
-});
+  test('sends a trusted click to Flow instead of calling HTMLElement.click', async () => {
+    const { actions, updates } = await runGeneration({ fixedPrompt: true, liveRadio: true, menu: false });
+    assert.ok(actions.includes('trusted-generate:120,220'), actions.join(', '));
+    assert.equal(actions.includes('generate'), false);
+    assert.equal(updates.at(-1).status, 'COMPLETED');
+  });

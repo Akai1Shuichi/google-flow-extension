@@ -318,7 +318,7 @@
   async function processScene(editor, scene, index, total) {
     const sceneId = scene.id || `SC${index + 1}`;
     const prompt = (scene.prompt || "").trim();
-    const characterNames = String(scene.character || "").split(";").map(name => name.trim()).filter(Boolean);
+    const characterNames = String(scene.character || "").split(/[;,]/).map(name => name.trim()).filter(Boolean);
 
     updateProgress(index + 1, total, `Đang xử lý ${sceneId} (${index + 1}/${total})...`);
     console.log(`[Flow AI Auto] Bắt đầu Scene ${sceneId}: character="${characterNames.join('; ')}", prompt=${prompt.substring(0, 60)}...`);
