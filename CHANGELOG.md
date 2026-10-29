@@ -20,3 +20,7 @@ Ví dụ: `"character": "Người chồng; Người vợ"` sẽ tìm và gắn c
 ## [1.3]
 
 - Hỗ trợ nhiều tham chiếu nhân vật ngăn cách bằng dấu chấm phẩy (`;`), dấu phẩy (`,`) hoặc kết hợp cả hai trong trường `character`.
+
+## [1.4]
+
+- Hỗ trợ ngôn ngữ Tiếng Việt , Tiếng Anh trong google flow

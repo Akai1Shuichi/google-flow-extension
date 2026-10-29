@@ -19,4 +19,5 @@ build/
 .idea/
 .DS_Store
 Thumbs.db
-*.log
+*.log'
+python-runner/*

@@ -40,10 +40,10 @@
     tile.scrollIntoView({block: 'center'});
     tile.dispatchEvent(new MouseEvent('mouseenter', {bubbles: true}));
     tile.dispatchEvent(new MouseEvent('mouseover', {bubbles: true}));
-    const more = await waitFor(() => tile.querySelector('button[aria-label="More options"]'), stopped);
+    const more = await waitFor(() => tile.querySelector('button[aria-label="More options"], button[aria-label="Tuỳ chọn khác"], button[aria-label="Tùy chọn khác"], button[aria-label="Các tùy chọn khác"]'), stopped);
     more.click();
     const menu = await waitFor(() => [...document.querySelectorAll('.cdk-overlay-pane button, [role="menuitem"]')]
-      .find(button => (button.querySelector('.label')?.textContent || button.innerText || '').trim() === 'Rename'), stopped);
+      .find(button => /^(?:rename|đổi tên)$/i.test((button.querySelector('.label')?.textContent || button.innerText || '').normalize('NFC').trim())), stopped);
     menu.click();
     const input = await waitFor(() => [...document.querySelectorAll('input.editable-text-input.editing, .footer-left input')]
       .find(element => element.getClientRects().length), stopped);

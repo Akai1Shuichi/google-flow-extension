@@ -40,6 +40,10 @@
 
   const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   const isVisible = (el) => !!el && el.getClientRects().length > 0;
+  // Chuẩn hóa Unicode nhưng giữ dấu để không nhầm hai tên nhân vật khác nhau.
+  const normalizeText = (text) => String(text || '').normalize('NFC').replace(/\s+/g, ' ').trim().toLowerCase();
+  const controlText = (el) => normalizeText(`${el.getAttribute('aria-label') || ''} ${el.innerText || ''}`);
+  const isImageLabel = (text) => /^(?:images?|hình ảnh|ảnh)(?:\s|$)/i.test(normalizeText(text));
 
   function updateProgress(current, total, text, status = "RUNNING", error = null) {
     chrome.runtime.sendMessage({
@@ -55,7 +59,7 @@
     if (promptBox) {
       const controls = Array.from(promptBox.querySelectorAll('button, [role="button"]'));
       const label = (el) => (el.getAttribute("aria-label") || el.innerText || "").trim();
-      const modeControl = controls.find(el => /^(?:image|images)$/i.test(label(el)));
+      const modeControl = controls.find(el => /^(?:images?|hình ảnh|ảnh)$/i.test(normalizeText(label(el))));
       if (modeControl) {
         console.log("[Flow AI Auto] Chế độ Image đã được chọn.");
         return true;
@@ -63,17 +67,17 @@
 
       // Flow mới mở bộ chọn Image/Video khi nhấp vào tên model.
       const modelControl = controls.find(el =>
-        /(?:nano banana|veo|model|video)/i.test(`${label(el)} ${el.innerText || ""}`) &&
+        /(?:nano banana|veo|model|video|mô hình)/i.test(`${label(el)} ${el.innerText || ""}`) &&
         isVisible(el) && !el.disabled
       );
       if (modelControl) {
         modelControl.click();
         await sleep(300);
         const modeGroup = document.querySelector(
-          'flow-prompt-box-settings flow-toggles[aria-label="Mode"], .settings-content-overlay flow-toggles[aria-label="Mode"]'
+          'flow-prompt-box-settings flow-toggles[aria-label="Mode"], .settings-content-overlay flow-toggles[aria-label="Mode"], flow-prompt-box-settings flow-toggles[aria-label="Chế độ"], .settings-content-overlay flow-toggles[aria-label="Chế độ"]'
         );
         const imageRadio = Array.from(modeGroup?.querySelectorAll('[role="radio"]') || []).find(el =>
-          /^(?:image|images)$/i.test((el.querySelector('.toggle-text')?.textContent || el.innerText?.split('\n').pop() || '').trim())
+          isImageLabel(el.querySelector('.toggle-text')?.textContent || el.innerText?.split('\n').pop() || '')
         );
         if (imageRadio) {
           if (imageRadio.getAttribute('aria-checked') !== 'true') {
@@ -89,7 +93,7 @@
           '[role="menuitem"], [role="option"], .cdk-overlay-pane button, .cdk-overlay-pane mat-option, [role="menu"] button'
         );
         const imageChoice = Array.from(choices).find(el =>
-          /^image(?:\s|$)/i.test((el.innerText || el.getAttribute("aria-label") || "").trim()) &&
+          isImageLabel(el.innerText || el.getAttribute("aria-label") || '') &&
           isVisible(el)
         );
         if (!imageChoice) {
@@ -106,7 +110,7 @@
     const listItems = Array.from(document.querySelectorAll("mat-list-item"));
     for (const item of listItems) {
       const text = item.innerText || "";
-      if (/images/i.test(text)) {
+      if (isImageLabel(text)) {
         item.click();
         console.log("[Flow AI Auto] Đã click tab Images.");
         await sleep(1000);
@@ -172,9 +176,16 @@
     if (!charName) return;
     console.log(`[Flow AI Auto] Bắt đầu tìm và chọn nhân vật "${charName}"...`);
     const ingredientCount = () => document.querySelectorAll(
-      'flow-prompt-box .chip-container[aria-label="Ingredient"], flow-base-prompt-box .chip-container[aria-label="Ingredient"]'
+      'flow-prompt-box .chip-container, flow-base-prompt-box .chip-container'
     ).length;
     const beforeCount = ingredientCount();
+    const waitForIngredient = async () => {
+      for (let attempt = 0; attempt < 20 && !shouldStop; attempt++) {
+        if (ingredientCount() > beforeCount) return true;
+        await sleep(150);
+      }
+      return false;
+    };
 
     // Cách 1: Thử tìm trong flow-add-menu-side-nav
     let sideNav = document.querySelector("flow-add-menu-side-nav");
@@ -188,10 +199,10 @@
           // Bỏ qua nút tạo ảnh
           if (btn.closest("flow-generate-icon-button")) continue;
 
-          const txt = (btn.innerText || btn.getAttribute("aria-label") || "").toLowerCase();
+          const txt = controlText(btn);
           const hasAddIcon = Array.from(btn.querySelectorAll("mat-icon")).some(icon => (icon.innerText || "").trim().toLowerCase() === "add");
 
-          if (hasAddIcon || txt.includes("add") || txt.includes("character")) {
+          if (hasAddIcon || /add|character|thêm|nhân vật/.test(txt)) {
             if (isVisible(btn)) {
               btn.click();
               await sleep(600);
@@ -203,13 +214,13 @@
       }
     }
 
-    if (sideNav) {
+    if (isVisible(sideNav)) {
       // 1. Click vào item / tab "Characters" bên trong side-nav
       let charTabClicked = false;
       const allElements = Array.from(sideNav.querySelectorAll('*'));
       for (const el of allElements) {
-        const text = (el.innerText || "").trim().toLowerCase();
-        if ((text === "characters" || text === "character") && el.children.length === 0) {
+        const text = normalizeText(el.innerText);
+        if (/^(?:characters?|nhân vật)$/.test(text) && el.children.length === 0) {
           el.click();
           console.log("[Flow AI Auto] Đã click vào mục Characters trong side-nav.");
           charTabClicked = true;
@@ -220,7 +231,7 @@
 
       if (!charTabClicked) {
         const anyCharTab = Array.from(sideNav.querySelectorAll('[role="tab"], mat-list-item, button, .menu-item')).find(el => 
-          /characters?/i.test(el.innerText || "")
+          /characters?|nhân vật/i.test(controlText(el))
         );
         if (anyCharTab) {
           anyCharTab.click();
@@ -236,7 +247,7 @@
 
       for (const at of assetTitles) {
         const titleText = (at.innerText || "").trim();
-        if (titleText.toLowerCase() === charName.toLowerCase()) {
+        if (normalizeText(titleText) === normalizeText(charName)) {
           matchedAsset = at;
           break;
         }
@@ -247,7 +258,7 @@
         const globalTitles = document.querySelectorAll(".asset-title, [class*='asset-title']");
         for (const at of globalTitles) {
           const titleText = (at.innerText || "").trim();
-          if (titleText.toLowerCase() === charName.toLowerCase()) {
+          if (normalizeText(titleText) === normalizeText(charName)) {
             matchedAsset = at;
             break;
           }
@@ -259,12 +270,15 @@
         // Click vào asset hoặc phần tử cha clickable của nó
         const clickTarget = matchedAsset.closest("flow-add-menu-asset-item, button, mat-card, flow-asset-item, .asset-card, .mat-mdc-card") || matchedAsset;
         clickTarget.click();
-        await sleep(600);
-        if (ingredientCount() === beforeCount) {
-          const addButton = document.querySelector('button.detail-add-to-prompt-btn, button.add-to-prompt-button, button[aria-label="Add to prompt"], flow-add-menu-asset-preview button');
-          if (addButton && isVisible(addButton)) {
+        if (!await waitForIngredient()) {
+          // Ưu tiên class ổn định, không bấm nhầm nút bất kỳ trong preview.
+          const addButton = document.querySelector('button.detail-add-to-prompt-btn, button.add-to-prompt-button') ||
+            Array.from(document.querySelectorAll('flow-add-menu-asset-preview button, flow-add-menu-side-nav button, button[aria-label]')).find(btn =>
+              isVisible(btn) && /add to prompt|thêm vào (?:câu lệnh|lời nhắc|prompt)/.test(controlText(btn))
+            );
+          if (addButton && isVisible(addButton) && !addButton.disabled) {
             addButton.click();
-            await sleep(600);
+            await waitForIngredient();
           }
         }
         if (ingredientCount() <= beforeCount) {
@@ -289,7 +303,7 @@
     );
     let matchedOption = null;
     for (const opt of candidates) {
-      if ((opt.innerText || "").toLowerCase().includes(charName.toLowerCase())) {
+      if (normalizeText(opt.innerText).includes(normalizeText(charName))) {
         matchedOption = opt;
         break;
       }
@@ -324,7 +338,7 @@
     console.log(`[Flow AI Auto] Bắt đầu Scene ${sceneId}: character="${characterNames.join('; ')}", prompt=${prompt.substring(0, 60)}...`);
 
     // Flow mới giữ ingredient ngoài editor; Clear prompt xóa cả chữ và chip.
-    const clearPrompt = document.querySelector('flow-prompt-box button[aria-label="Clear prompt"], flow-base-prompt-box button[aria-label="Clear prompt"]');
+    const clearPrompt = document.querySelector('flow-prompt-box button[aria-label="Clear prompt"], flow-base-prompt-box button[aria-label="Clear prompt"], flow-prompt-box button.clear-button, flow-base-prompt-box button.clear-button, flow-prompt-box button[aria-label="Xóa câu lệnh"], flow-base-prompt-box button[aria-label="Xóa câu lệnh"], flow-prompt-box button[aria-label="Xoá câu lệnh"], flow-base-prompt-box button[aria-label="Xoá câu lệnh"], flow-prompt-box button[aria-label="Xóa lời nhắc"], flow-base-prompt-box button[aria-label="Xóa lời nhắc"]');
     if (isVisible(clearPrompt)) {
       clearPrompt.click();
       await sleep(200);
@@ -340,7 +354,7 @@
     // Xóa các tag/chip nhân vật cũ nếu còn tồn tại trong prompt box
     try {
       const removeButtons = document.querySelectorAll(
-        'flow-prompt-box button[aria-label*="Remove" i], flow-prompt-box [aria-label*="Delete" i], flow-prompt-box .mat-mdc-chip-remove, flow-prompt-box flow-chip-remove, flow-chip button'
+        'flow-prompt-box .chip-container button[aria-label*="Remove" i], flow-base-prompt-box .chip-container button[aria-label*="Remove" i], flow-prompt-box .chip-container button[aria-label*="Delete" i], flow-base-prompt-box .chip-container button[aria-label*="Delete" i], flow-prompt-box .chip-container button[aria-label*="Xóa" i], flow-base-prompt-box .chip-container button[aria-label*="Xóa" i], flow-prompt-box .mat-mdc-chip-remove, flow-base-prompt-box .mat-mdc-chip-remove, flow-prompt-box flow-chip-remove, flow-base-prompt-box flow-chip-remove, flow-chip button'
       );
       for (const btn of removeButtons) {
         if (isVisible(btn)) {
@@ -377,6 +391,8 @@
       'flow-base-prompt-box flow-generate-icon-button button',
       'flow-prompt-box button[aria-label*="Generate" i]',
       'flow-base-prompt-box button[aria-label*="Generate" i]',
+      'flow-prompt-box button[aria-label*="Tạo" i]',
+      'flow-base-prompt-box button[aria-label*="Tạo" i]',
       'flow-prompt-box button[aria-label*="Create" i]',
       'button[aria-label="Run" i]'
     ];
@@ -539,14 +555,14 @@
             await sleep(200);
 
             // Bấm nút More options
-            const moreBtn = tile.querySelector('button[aria-label="More options"]');
+            const moreBtn = tile.querySelector('button[aria-label="More options"], button[aria-label="Tuỳ chọn khác"], button[aria-label="Tùy chọn khác"], button[aria-label="Các tùy chọn khác"]');
             if (moreBtn) {
               moreBtn.click();
               await sleep(400);
 
               // Tìm nút Rename trong menu
               const menuButtons = Array.from(document.querySelectorAll('.cdk-overlay-pane button, [role="menuitem"]'));
-              const renameBtn = menuButtons.find(b => (b.innerText || "").toLowerCase().includes("rename"));
+              const renameBtn = menuButtons.find(b => /^(?:rename|đổi tên)$/.test(normalizeText(b.innerText)));
               if (renameBtn) {
                 renameBtn.click();
                 await sleep(400);
@@ -574,7 +590,7 @@
         }
 
         // 3. Xóa ô search
-        const clearBtn = document.querySelector('button[aria-label="Clear search input"]');
+        const clearBtn = document.querySelector('button[aria-label="Clear search input"], button[aria-label="Xóa nội dung tìm kiếm"], button[aria-label="Xóa tìm kiếm"]');
         if (clearBtn) {
           clearBtn.click();
         } else {
