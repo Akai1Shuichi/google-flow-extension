@@ -6,7 +6,7 @@ const path = require('node:path');
 
 const source = fs.readFileSync(path.join(__dirname, 'content.js'), 'utf8');
 
-async function runGeneration({ menu = true, submit = true, imageLabel = 'Image', basePrompt = false, modelAriaLabel = 'Nano Banana Pro', liveRadio = null, existingIngredient = false, fixedPrompt = false, editorReplacedAfterCharacter = false, submitDelayChecks = 0, character, assetMenu = false } = {}) {
+async function runGeneration({ menu = true, submit = true, imageLabel = 'Image', basePrompt = false, modelAriaLabel = 'Nano Banana Pro', liveRadio = null, existingIngredient = false, fixedPrompt = false, editorReplacedAfterCharacter = false, submitDelayChecks = 0, character, assetMenu = false, locale = 'en', directAttachment = false, attachmentFails = false, attachmentDelayChecks = 0, previewByLabel = false, scenePrompt = 'A red kite' } = {}) {
   const actions = [];
   const updates = [];
   let listener;
@@ -27,7 +27,7 @@ async function runGeneration({ menu = true, submit = true, imageLabel = 'Image',
   let menuOpen = false;
   trigger.click = () => { actions.push(menuOpen ? 'close-model-menu' : 'open-model-menu'); menuOpen = !menuOpen; };
   const image = element('choose-image', imageLabel);
-  const imageRadio = element('choose-image-radio', 'image\nImage');
+  const imageRadio = element('choose-image-radio', locale === 'vi' ? 'image\nHình ảnh' : 'image\nImage');
   imageRadio.getAttribute = key => key === 'aria-checked' ? String(liveRadio) : null;
   const modeGroup = { querySelectorAll: () => [imageRadio] };
   const generate = element('generate', 'Generate');
@@ -37,12 +37,18 @@ async function runGeneration({ menu = true, submit = true, imageLabel = 'Image',
   }
   const clearPrompt = element('clear-prompt', 'Clear prompt');
   let ingredientCount = 0;
-  const assetTitles = ['Người chồng', 'Người vợ'].map(name => ({
+  let pendingAttachment = 0;
+  const attach = () => {
+    if (attachmentFails) return;
+    if (attachmentDelayChecks) pendingAttachment = attachmentDelayChecks;
+    else ingredientCount++;
+  };
+  const assetTitles = ['Người chồng', 'Người vợ', 'Người tóc rối mặc da thú', 'Caveman'].map(name => ({
     innerText: name,
-    closest() { return { click() { actions.push(`select-asset:${name}`); } }; }
+    closest() { return { click() { actions.push(`select-asset:${name}`); if (directAttachment) attach(); } }; }
   }));
-  const addToPrompt = element('add-to-prompt');
-  addToPrompt.click = () => { actions.push('add-to-prompt'); ingredientCount++; };
+  const addToPrompt = element('add-to-prompt', locale === 'vi' ? 'Thêm vào câu lệnh' : 'Add to prompt');
+  addToPrompt.click = () => { actions.push('add-to-prompt'); attach(); };
   const sideNav = { getClientRects() { return [{}]; }, querySelectorAll() { return []; } };
   const promptBox = {
     querySelectorAll(selector) {
@@ -69,8 +75,8 @@ async function runGeneration({ menu = true, submit = true, imageLabel = 'Image',
     body: { click() {} },
     querySelector(selector) {
       if (assetMenu && selector === 'flow-add-menu-side-nav') return sideNav;
-      if (assetMenu && selector.includes('detail-add-to-prompt-btn')) return addToPrompt;
-      if (selector.includes('button[aria-label="Clear prompt"]')) return existingIngredient ? clearPrompt : null;
+      if (assetMenu && selector.includes('detail-add-to-prompt-btn')) return previewByLabel ? null : addToPrompt;
+      if (selector.includes('button[aria-label="Clear prompt"]')) return existingIngredient && (locale === 'en' || selector.includes('button.clear-button') || selector.includes('Xoá câu lệnh')) ? clearPrompt : null;
       if (selector.includes('flow-toggles[aria-label="Mode"]')) return menuOpen && liveRadio !== null ? modeGroup : null;
       if (selector === 'flow-prompt-box-settings, .settings-content-overlay') return menuOpen && liveRadio !== null ? { offsetParent: fixedPrompt ? null : {}, getClientRects() { return [{}]; } } : null;
       if (selector.includes('flow-prompt-box') && !selector.includes('button') && !selector.includes('contenteditable')) return promptBox;
@@ -78,12 +84,17 @@ async function runGeneration({ menu = true, submit = true, imageLabel = 'Image',
       return null;
     },
     querySelectorAll(selector) {
-      if (assetMenu && selector.includes('.chip-container[aria-label="Ingredient"]')) return Array(ingredientCount).fill({});
+      if (assetMenu && previewByLabel && selector.includes('flow-add-menu-asset-preview button')) return [element('wrong-preview-button', 'Close'), addToPrompt];
+      if (assetMenu && selector.includes('.chip-container')) {
+        if (pendingAttachment && --pendingAttachment === 0) ingredientCount++;
+        if (locale === 'vi' && selector.includes('[aria-label="Ingredient"]')) return [];
+        return Array(ingredientCount).fill({});
+      }
       if (assetMenu && selector.includes('.asset-title')) return assetTitles;
       if (selector.includes('mat-list-item')) return [];
       if (selector.includes('role="menuitem"') || selector.includes('role="option"') || selector.includes('cdk-overlay-pane')) return menu ? [image] : [];
       if (selector.includes('flow-generate-icon-button')) return [];
-      if (selector.includes('aria-label*="Generate"') && (!basePrompt || selector.includes('flow-base-prompt-box'))) return submit ? [generate] : [];
+      if ((selector.includes('aria-label*="Generate"') && locale === 'en' || selector.includes('aria-label*="Tạo"') && locale === 'vi') && (!basePrompt || selector.includes('flow-base-prompt-box'))) return submit ? [generate] : [];
       if (selector.includes('aria-label="Run"')) return [];
       return [];
     },
@@ -111,7 +122,7 @@ async function runGeneration({ menu = true, submit = true, imageLabel = 'Image',
   } };
   vm.runInNewContext(source, { document, chrome, console: { log() {}, error() {} },
     setTimeout: callback => setImmediate(callback), KeyboardEvent: class {} });
-  listener({ action: 'START_GENERATION', data: { scenes: [{ id: 'SC01', prompt: 'A red kite', character: character ?? (editorReplacedAfterCharacter ? 'X' : '') }] } }, {}, () => {});
+  listener({ action: 'START_GENERATION', data: { scenes: [{ id: 'SC01', prompt: scenePrompt, character: character ?? (editorReplacedAfterCharacter ? 'X' : '') }] } }, {}, () => {});
   await done;
   return { actions, updates };
 }
@@ -214,7 +225,66 @@ for (const character of ['Người chồng; Người vợ', 'Người chồng, N
     assert.equal(actions.filter(action => action === 'add-to-prompt').length, 2);
     assert.equal(updates.at(-1).status, 'COMPLETED');
   });
-  }
+}
+
+for (const [locale, character] of [['vi', 'Người tóc rối mặc da thú'], ['en', 'Caveman']]) {
+  test(`recognizes attached reference chips on ${locale} Flow`, async () => {
+    const { actions, updates } = await runGeneration({ assetMenu: true, locale, character });
+    assert.equal(updates.at(-1).status, 'COMPLETED');
+    assert.ok(actions.includes('insert: A red kite'));
+  });
+
+  test(`does not click Add again after direct attachment on ${locale} Flow`, async () => {
+    const { actions, updates } = await runGeneration({ assetMenu: true, locale, character, directAttachment: true });
+    assert.equal(updates.at(-1).status, 'COMPLETED');
+    assert.equal(actions.includes('add-to-prompt'), false);
+  });
+}
+
+test('waits for a delayed ingredient chip before sending a prompt', async () => {
+  const { actions, updates } = await runGeneration({ assetMenu: true, character: 'Caveman', attachmentDelayChecks: 4 });
+  assert.equal(updates.at(-1).status, 'COMPLETED');
+  assert.equal(actions.filter(a => a === 'add-to-prompt').length, 1);
+});
+
+test('does not generate when the selected asset never attaches', async () => {
+  const { actions, updates } = await runGeneration({ assetMenu: true, locale: 'vi', character: 'Người tóc rối mặc da thú', attachmentFails: true });
+  assert.equal(updates.at(-1).status, 'ERROR');
+  assert.equal(actions.some(a => a.startsWith('trusted-generate:')), false);
+});
+
+test('selects the Vietnamese image menu item', async () => {
+  const { updates } = await runGeneration({ imageLabel: 'Hình ảnh\nNano Banana Pro', locale: 'vi' });
+  assert.equal(updates.at(-1).status, 'COMPLETED');
+});
+
+test('selects the Vietnamese image radio', async () => {
+  const { actions, updates } = await runGeneration({ liveRadio: false, menu: false, locale: 'vi' });
+  assert.equal(updates.at(-1).status, 'COMPLETED');
+  assert.ok(actions.includes('choose-image-radio'));
+});
+
+for (const locale of ['en', 'vi']) {
+  test(`finds the ${locale} Add to prompt button by label without clicking other preview controls`, async () => {
+    const { actions, updates } = await runGeneration({ assetMenu: true, previewByLabel: true, locale, character: 'Caveman' });
+    assert.equal(updates.at(-1).status, 'COMPLETED');
+    assert.equal(actions.includes('wrong-preview-button'), false);
+    assert.ok(actions.includes('add-to-prompt'));
+  });
+}
+
+test('clears a previous prompt on Vietnamese Flow', async () => {
+  const { actions, updates } = await runGeneration({ locale: 'vi', existingIngredient: true });
+  assert.equal(updates.at(-1).status, 'COMPLETED');
+  assert.ok(actions.includes('clear-prompt'));
+});
+
+test('matches decomposed Vietnamese character names and preserves the Vietnamese prompt', async () => {
+  const { actions, updates } = await runGeneration({ locale: 'vi', assetMenu: true, character: 'Người tóc rối mặc da thú'.normalize('NFD'), scenePrompt: 'Người tóc rối cầm cá.' });
+  assert.equal(updates.at(-1).status, 'COMPLETED');
+  assert.ok(actions.includes('select-asset:Người tóc rối mặc da thú'));
+  assert.ok(actions.includes('insert: Người tóc rối cầm cá.'));
+});
 
   test('waits for Start generation to become enabled before clicking', async () => {
     const { actions, updates } = await runGeneration({ submitDelayChecks: 3 });

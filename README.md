@@ -12,6 +12,8 @@ Không cần cài dependency hoặc chạy bước build.
 
 Nếu đã cài bản cũ, bấm **Reload** extension trong `chrome://extensions`, rồi **F5 tab Flow** và mở lại Side Panel để nhận đầy đủ script mới.
 
+Luồng tạo ảnh và tự đổi tên hỗ trợ giao diện Flow tiếng Anh hoặc tiếng Việt. Tên nhân vật và prompt có thể dùng cả hai ngôn ngữ; giữ dấu tiếng Việt trong tên để khớp đúng asset của dự án. Extension chờ chip ảnh tham chiếu xuất hiện trước khi gửi prompt.
+
 ## Sử dụng
 
 1. Dán danh sách scene vào ô **Dữ liệu Scenes (JSON)**, hoặc chọn **Tải file .json**. Có thể bấm **Tải mẫu JSON** hoặc xem [sample_scenes.json](sample_scenes.json).

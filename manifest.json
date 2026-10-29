@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "minimum_chrome_version": "118",
   "name": "Google Flow AI Auto-Generator",
-  "version": "1.2",
+  "version": "1.4",
   "description": "Tự động tạo ảnh theo danh sách Scene trên Google Flow với trường character theo từng cảnh từ JSON.",
   "permissions": [
     "activeTab",
